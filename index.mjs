@@ -1,3 +1,25 @@
+// src/domain/stage.ts
+var stageText = `
+00000000
+00000000
+00000000
+11100222
+11100222
+00000000
+00000000
+00000000
+`;
+var formationText = `
+00,00,00,i1,k1,00,00,00
+00,00,00,i1,i1,00,00,00
+00,00,00,i1,00,00,00,00
+00,00,00,00,00,00,00,00
+00,00,00,00,00,00,00,00
+00,00,00,00,00,00,00,00
+00,00,00,a0,00,00,00,c0
+c0,00,00,k0,c0,00,i0,00
+`;
+
 // src/domain/LogicalWar.ts
 var LogicalWar = class _LogicalWar {
   field;
@@ -30,21 +52,43 @@ var LogicalWar = class _LogicalWar {
     return new _LogicalWar(field, pieces, isDeadFriendKing, isDeadEnemyKing, side, attackLog, turnCount);
   }
   run() {
-    const pieces = this.pieces.map((unit) => {
-      if (this.side == unit.side && unit.isAlive) {
-        return unit.reset().moveIfNeeded({
-          field: this.field,
-          pieces: this.pieces
-        });
+    var pieces = this.pieces.map((unit) => unit.reset());
+    for (let i = 0; i < 3; i++) {
+      pieces = pieces.map((unit) => {
+        if (unit.id == "U0") {
+          console.log(unit);
+        }
+        if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+          return unit.moveIfNeeded({
+            field: this.field,
+            pieces
+          });
+        } else {
+          return unit;
+        }
+      });
+    }
+    pieces = pieces.map((unit) => {
+      if (unit.isDead) {
+        return unit;
+      }
+      if (this.side != unit.side) {
+        return unit;
+      }
+      const otherKing = this.side == "friend" ? this.pieces.enemyKing : this.pieces.friendKing;
+      const goalY = this.side == "friend" ? 0 : 7;
+      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
+      if (unit.position.y == goalY) {
+        return unit.changeDirection(leftOrRight);
       } else {
-        return unit.reset();
+        return unit;
       }
     });
     const offenceAndDefenceList = pieces.mapOther((unit) => {
       if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
-        return unit.attackIfNeeded({
+        return unit.getOffenceAndDefence({
           field: this.field,
-          pieces: this.pieces
+          pieces
         });
       } else {
         return null;
@@ -60,17 +104,15 @@ var LogicalWar = class _LogicalWar {
     const side = this.side == "friend" ? "enemy" : "friend";
     return new _LogicalWar(this.field, this.pieces, this.isDeadFriendKing, this.isDeadEnemyKing, side, this.attackLog, this.turnCount + 1);
   }
-  check() {
-    const isDeadFriendKing = this.pieces.friendKing.isDead;
-    const isDeadEnemyKing = this.pieces.enemyKing.isDead;
-    return new _LogicalWar(this.field, this.pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
-  }
   isGameOver() {
     return this.isDeadFriendKing || this.isDeadEnemyKing;
   }
   attack({ offence, defence }) {
     console.log(offence, defence);
     const pieces = this.pieces.map((unit) => {
+      if (unit.id == offence.id) {
+        return offence.setState("attack");
+      }
       if (unit.id == defence.id) {
         return defence.attacked(offence.status.attackPoint);
       }
@@ -80,26 +122,28 @@ var LogicalWar = class _LogicalWar {
       offence,
       defence
     });
-    return new _LogicalWar(this.field, pieces, this.isDeadFriendKing, this.isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
+    const isDeadFriendKing = pieces.friendKing.isDead;
+    const isDeadEnemyKing = pieces.enemyKing.isDead;
+    return new _LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
   }
 };
 var _id = 0;
 function id() {
   return `U${_id++}`;
 }
+var FieldType = /* @__PURE__ */ function(FieldType2) {
+  FieldType2[FieldType2["grass"] = 0] = "grass";
+  FieldType2[FieldType2["river"] = 1] = "river";
+  FieldType2[FieldType2["forest"] = 2] = "forest";
+  return FieldType2;
+}({});
 var Field = class {
   values;
   constructor() {
-    this.values = `
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    `.trim().split("\n").map((v) => v.trim()).map((row) => row.split("").map(Number));
+    this.values = stageText.trim().split("\n").map((v) => v.trim()).map((row) => row.split("").map(Number));
+  }
+  getFieldType(position) {
+    return this.values[position.y][position.x];
   }
 };
 var Pieces = class _Pieces {
@@ -153,16 +197,7 @@ var Pieces = class _Pieces {
         }, direction, side, "unprocessed", false);
       }
     };
-    const ary = `
-    00,00,00,i1,k1,00,00,00
-    00,00,00,00,i1,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,a0,00,00,00,00
-    00,00,00,k0,c0,00,00,00
-    `.trim().split("\n").map((v) => v.trim()).flatMap((row, y) => row.split(",").map((v, x) => createUnit(v, x, y)).filter((v) => v != null));
+    const ary = formationText.trim().split("\n").map((v) => v.trim()).flatMap((row, y) => row.split(",").map((v, x) => createUnit(v, x, y)).filter((v) => v != null));
     return new _Pieces(new Set(ary));
   }
   forEach(callback) {
@@ -271,90 +306,31 @@ var Unit = class {
     const status = this.status.attacked(power);
     return this.create(this.id, this.position, this.direction, this.side, status, this.state, true);
   }
-  isMovavle({ field, pieces }) {
-    const { x, y } = this.position;
-    if (this.direction == "up") {
-      return pieces.isEmpty({
-        x,
-        y: y - 1
-      });
-    }
-    if (this.direction == "down") {
-      return pieces.isEmpty({
-        x,
-        y: y + 1
-      });
-    }
-    if (this.direction == "left") {
-      return pieces.isEmpty({
-        x: x - 1,
-        y
-      });
-    }
-    if (this.direction == "right") {
-      return pieces.isEmpty({
-        x: x + 1,
-        y
-      });
-    }
-    return false;
+  isMovable({ field, pieces }) {
+    const nextPos = this.next(1);
+    return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
   }
-  setPosition({ x, y }) {
-    return this.create(this.id, {
-      x,
-      y
-    }, this.direction, this.side, this.status, this.state, this.isAttacked);
+  setPosition(position) {
+    return this.create(this.id, position, this.direction, this.side, this.status, this.state, this.isAttacked);
   }
   move({ field, pieces }) {
-    if (!this.isMovavle({
+    if (!this.isMovable({
       field,
       pieces
     })) {
       throw new Error("\u79FB\u52D5\u3067\u304D\u307E\u305B\u3093");
     }
-    const { x, y } = this.position;
-    if (this.direction == "up") {
-      return this.setPosition({
-        y: y - 1,
-        x
-      });
-    }
-    if (this.direction == "down") {
-      return this.setPosition({
-        y: y + 1,
-        x
-      });
-    }
-    if (this.direction == "left") {
-      return this.setPosition({
-        y,
-        x: x - 1
-      });
-    }
-    if (this.direction == "right") {
-      return this.setPosition({
-        y,
-        x: x + 1
-      });
-    }
-    throw new Error("\u79FB\u52D5\u3067\u304D\u307E\u305B\u3093(\u4E0D\u660E)");
+    const nextPos = this.next(1);
+    return this.setPosition(nextPos);
+  }
+  changeDirection(direction) {
+    return this.create(this.id, this.position, direction, this.side, this.status, this.state, this.isAttacked);
   }
   isAttackable({ field, pieces }) {
-    const { x, y } = this.position;
-    const debug = pieces.isEmpty(this.next({
-      x,
-      y
-    }));
-    if (pieces.isEmpty(this.next({
-      x,
-      y
-    }))) {
+    if (pieces.isEmpty(this.next())) {
       return false;
     }
-    const unit = pieces.getUnit(this.next({
-      x,
-      y
-    }));
+    const unit = pieces.getUnit(this.next());
     if (unit.side == this.side) {
       return false;
     }
@@ -367,15 +343,15 @@ var Unit = class {
     })) {
       throw new Error("\u653B\u6483\u53EF\u80FD\u306A\u5BFE\u8C61\u304C\u3042\u308A\u307E\u305B\u3093");
     }
-    return pieces.getUnit(this.next(this.position));
+    return pieces.getUnit(this.next());
   }
   /**
    * 向いている方向の座標を返す
-   * @param position 位置
    * @param num いくつ進むか
    * @returns 
    */
-  next({ x, y }, num = 1) {
+  next(num = 1) {
+    const { x, y } = this.position;
     if (this.direction == "up") {
       return {
         x,
@@ -412,7 +388,7 @@ var Unit = class {
     let result = this;
     let isMove = false;
     for (let i = 0; i < this.status.moveSpeed; i++) {
-      if (result.isMovavle({
+      if (result.isMovable({
         field,
         pieces
       })) {
@@ -428,7 +404,7 @@ var Unit = class {
     }
     return this;
   }
-  attackIfNeeded({ field, pieces }) {
+  getOffenceAndDefence({ field, pieces }) {
     if (this.state != "unprocessed") {
       return null;
     }
@@ -474,6 +450,17 @@ var InfantryUnit = class _InfantryUnit extends Unit {
   create(id2, position, direction, side, status, state, isAttacked) {
     return new _InfantryUnit(id2, position, direction, side, status, state, isAttacked);
   }
+  isMovable({ field, pieces }) {
+    const result = super.isMovable({
+      field,
+      pieces
+    });
+    if (!result) {
+      return false;
+    }
+    const fieldType = field.getFieldType(this.next(1));
+    return fieldType == FieldType.grass || fieldType == FieldType.forest;
+  }
 };
 var CavalryUnit = class _CavalryUnit extends Unit {
   id;
@@ -492,6 +479,17 @@ var CavalryUnit = class _CavalryUnit extends Unit {
   }
   create(id2, position, direction, side, status, state, isAttacked) {
     return new _CavalryUnit(id2, position, direction, side, status, state, isAttacked);
+  }
+  isMovable({ field, pieces }) {
+    const result = super.isMovable({
+      field,
+      pieces
+    });
+    if (!result) {
+      return false;
+    }
+    const fieldType = field.getFieldType(this.next(1));
+    return fieldType == FieldType.grass;
   }
 };
 var ArcherUnit = class _ArcherUnit extends Unit {
@@ -520,10 +518,7 @@ var ArcherUnit = class _ArcherUnit extends Unit {
   getAttackTargetNulable({ field, pieces }) {
     const { x, y } = this.position;
     for (let i = 1; i < 8; i++) {
-      const pos = this.next({
-        x,
-        y
-      }, i);
+      const pos = this.next(i);
       if (!pieces.isInBounds(pos)) {
         break;
       }
@@ -575,6 +570,14 @@ var KingUnit = class _KingUnit extends Unit {
   create(id2, position, direction, side, status, state, isAttacked) {
     return new _KingUnit(id2, position, direction, side, status, state, isAttacked);
   }
+  /**
+   * 王将は攻撃できない
+   * @param param0 
+   * @returns 
+   */
+  isAttackable({ field, pieces }) {
+    return false;
+  }
 };
 
 // src/index.ts
@@ -586,36 +589,38 @@ p5.setup = function() {
 };
 var tick = 0;
 p5.draw = function() {
-  if (game.isGameOver()) {
-    p5.noLoop();
-    return;
-  }
   tick = (tick + 1) % 60;
   if (tick === 0) {
-    game = game.run().check().nextSide();
-    console.log(game.pieces.mapOther((unit) => unit.status));
-  }
-  if (game.isDeadEnemyKing) {
-    p5.background(220);
-    p5.fill(0);
-    p5.textSize(32);
-    p5.text("You Win!", 100, 100);
-    return;
-  }
-  if (game.isDeadFriendKing) {
-    p5.background(220);
-    p5.fill(0);
-    p5.textSize(32);
-    p5.text("You Lose!", 100, 100);
-    return;
+    if (game.isGameOver()) {
+      if (game.isDeadEnemyKing) {
+        p5.fill(0);
+        p5.textSize(32);
+        p5.text("You Win!", 100, 300);
+      }
+      if (game.isDeadFriendKing) {
+        p5.fill(0);
+        p5.textSize(32);
+        p5.text("You Lose!", 100, 300);
+      }
+      p5.noLoop();
+      return;
+    }
+    game = game.run();
+    console.log(game.pieces.mapOther((unit) => unit));
   }
   p5.background(220);
   game.field.values.forEach((row, y) => {
     row.forEach((cell, x) => {
-      if (cell === 0) {
+      if (cell == FieldType.grass) {
         p5.fill(100, 255, 100);
-        p5.rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
       }
+      if (cell == FieldType.river) {
+        p5.fill(100, 100, 255);
+      }
+      if (cell == FieldType.forest) {
+        p5.fill(0, 100, 0);
+      }
+      p5.rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
     });
   });
   game.pieces.forEach((unit) => {
@@ -624,35 +629,39 @@ p5.draw = function() {
     }
     drawUnit(unit);
   });
+  if (tick === 0) {
+    game = game.nextSide();
+  }
 };
 function drawUnit(unit) {
   const { x, y } = unit.position;
   var baseColor = unit.side === "friend" ? p5.color(255, 0, 0) : p5.color(0, 0, 255);
-  baseColor = unit.isAttacked && tick % 2 == 0 ? p5.color(255, 255, 255) : baseColor;
+  baseColor = unit.isAttacked && tick % 2 == 0 && tick >= 20 && tick < 40 ? p5.color(255, 255, 255) : baseColor;
   p5.fill(baseColor);
+  var attackMotion = tick % 3 == 0 && tick < 20 && unit.state == "attack" ? 4 : 0;
   if (unit.direction == "up") {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE, (y + 1) * GRID_SIZE - attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE, (y + 1) * GRID_SIZE - attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE - attackMotion);
     p5.endShape(p5.CLOSE);
   } else if (unit.direction == "down") {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, (y + 1) * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE, y * GRID_SIZE + attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE, y * GRID_SIZE + attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, (y + 1) * GRID_SIZE + attackMotion);
     p5.endShape(p5.CLOSE);
   } else if (unit.direction == "left") {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE);
+    p5.vertex((x + 1) * GRID_SIZE - attackMotion, y * GRID_SIZE);
+    p5.vertex((x + 1) * GRID_SIZE - attackMotion, (y + 1) * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE - attackMotion, y * GRID_SIZE + GRID_SIZE / 2);
     p5.endShape(p5.CLOSE);
   } else if (unit.direction == "right") {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE + attackMotion, y * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE + attackMotion, (y + 1) * GRID_SIZE);
+    p5.vertex((x + 1) * GRID_SIZE + attackMotion, y * GRID_SIZE + GRID_SIZE / 2);
     p5.endShape(p5.CLOSE);
   }
   p5.fill(255);

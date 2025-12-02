@@ -1,3 +1,5 @@
+import { formationText, stageText } from "./stage.ts";
+
 export class LogicalWar {
   constructor(
     readonly field: Field,
@@ -25,19 +27,43 @@ export class LogicalWar {
   }
 
   run() {
+    var pieces = this.pieces.map(unit => unit.reset());
     // move
-    const pieces = this.pieces.map((unit) => {
-      if (this.side == unit.side && unit.isAlive) {
-        return unit.reset().moveIfNeeded({ field: this.field, pieces: this.pieces });
+    for (let i = 0; i < 3; i++) {// 駒が並んで動けなくなったとき用。あんまりよくないアルゴリズム。
+      pieces = pieces.map((unit) => {
+        if (unit.id == 'U0') {
+          console.log(unit);
+        }
+        if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+          return unit.moveIfNeeded({ field: this.field, pieces: pieces });
+        } else {
+          return unit;
+        }
+      });
+    }
+
+    // 奥に到達したら方向を変える
+    pieces = pieces.map(unit => {
+      if (unit.isDead) {
+        return unit;
+      }
+      if (this.side != unit.side) {
+        return unit;
+      }
+      const otherKing = this.side == 'friend' ? this.pieces.enemyKing : this.pieces.friendKing;
+      const goalY = this.side == 'friend' ? 0 : 7;
+      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
+      if (unit.position.y == goalY) {
+        return unit.changeDirection(leftOrRight);
       } else {
-        return unit.reset();
+        return unit;
       }
     });
 
     // attack
     const offenceAndDefenceList: OffenceAndDefence[] = pieces.mapOther(unit => {
       if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
-        return unit.attackIfNeeded({ field: this.field, pieces: this.pieces });
+        return unit.getOffenceAndDefence({ field: this.field, pieces: pieces });
       } else {
         return null;
       }
@@ -49,15 +75,10 @@ export class LogicalWar {
 
     return attackedGame;
   }
+
   nextSide() {
     const side = this.side == 'friend' ? 'enemy' : 'friend';
     return new LogicalWar(this.field, this.pieces, this.isDeadFriendKing, this.isDeadEnemyKing, side, this.attackLog, this.turnCount + 1);
-  }
-
-  check() {
-    const isDeadFriendKing = this.pieces.friendKing.isDead;
-    const isDeadEnemyKing = this.pieces.enemyKing.isDead;
-    return new LogicalWar(this.field, this.pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
   }
 
   isGameOver() {
@@ -67,6 +88,9 @@ export class LogicalWar {
   attack({ offence, defence }: OffenceAndDefence) {
     console.log(offence, defence);
     const pieces = this.pieces.map(unit => {
+      if (unit.id == offence.id) {
+        return offence.setState("attack");
+      }
       if (unit.id == defence.id) {
         return defence.attacked(offence.status.attackPoint);
       }
@@ -74,7 +98,9 @@ export class LogicalWar {
     });
     // イミュータブルでない
     this.attackLog[this.turnCount].push({ offence, defence });
-    return new LogicalWar(this.field, pieces, this.isDeadFriendKing, this.isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
+    const isDeadFriendKing = pieces.friendKing.isDead;
+    const isDeadEnemyKing = pieces.enemyKing.isDead;
+    return new LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
   }
 }
 
@@ -84,20 +110,32 @@ function id() {
 }
 
 
+
+
+function movePieces(field: Field, pieces: Pieces, side: Side) {
+  pieces.map((unit) => {
+    if (side == unit.side && unit.isAlive) {
+      return unit.moveIfNeeded({ field: field, pieces: pieces });
+    } else {
+      return unit;
+    }
+  });
+}
+
+export enum FieldType {
+  grass = 0,
+  river = 1,
+  forest = 2,
+}
+
 class Field {
-  values: (number | null)[][];
+  values: FieldType[][];
   constructor() {
     // 8x8の2次元配列を生成する
-    this.values = `
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    00000000
-    `.trim().split('\n').map(v => v.trim()).map(row => row.split('').map(Number));
+    this.values = stageText.trim().split('\n').map(v => v.trim()).map(row => row.split('').map(Number));
+  }
+  getFieldType(position: Position) {
+    return this.values[position.y][position.x];
   }
 }
 
@@ -154,16 +192,7 @@ class Pieces {
      * left:2
      * right:3
      */
-    const ary: Unit[] = `
-    00,00,00,i1,k1,00,00,00
-    00,00,00,00,i1,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,00,00,00,00,00
-    00,00,00,a0,00,00,00,00
-    00,00,00,k0,c0,00,00,00
-    `.trim().split('\n').map(v => v.trim()).flatMap((row, y) => row.split(',').map((v, x) => createUnit(v, x, y)).filter(v => v != null));
+    const ary: Unit[] = formationText.trim().split('\n').map(v => v.trim()).flatMap((row, y) => row.split(',').map((v, x) => createUnit(v, x, y)).filter(v => v != null));
     return new Pieces(new Set(ary))
   }
   forEach(callback: (unit: Unit) => void) {
@@ -249,7 +278,7 @@ export class Status {
   }
 }
 
-type UnitState = "unprocessed" | "moved" | "attacked" | "wait";
+type UnitState = "unprocessed" | "moved" | "attack" | "wait";
 type OffenceAndDefence = { offence: Unit, defence: Unit };
 
 export class Unit {
@@ -293,55 +322,32 @@ export class Unit {
     return this.create(this.id, this.position, this.direction, this.side, status, this.state, true);
   }
 
-  isMovavle({ field, pieces }: { field: Field, pieces: Pieces }) {
-    const { x, y } = this.position;
-    if (this.direction == 'up') {
-      return pieces.isEmpty({ x, y: y - 1 });
-    }
-    if (this.direction == 'down') {
-      return pieces.isEmpty({ x, y: y + 1 });
-    }
-    if (this.direction == 'left') {
-      return pieces.isEmpty({ x: x - 1, y });
-    }
-    if (this.direction == 'right') {
-      return pieces.isEmpty({ x: x + 1, y });
-    }
-    return false;
+  isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
+    const nextPos: Position = this.next(1);
+    return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
   }
 
-  setPosition({ x, y }: Position) {
-    return this.create(this.id, { x, y }, this.direction, this.side, this.status, this.state, this.isAttacked);
+  setPosition(position: Position) {
+    return this.create(this.id, position, this.direction, this.side, this.status, this.state, this.isAttacked);
   }
 
   move({ field, pieces }: { field: Field, pieces: Pieces }) {
-    if (!this.isMovavle({ field, pieces })) {
+    if (!this.isMovable({ field, pieces })) {
       throw new Error('移動できません');
     }
+    const nextPos = this.next(1);
+    return this.setPosition(nextPos);
+  }
 
-    const { x, y } = this.position;
-    if (this.direction == 'up') {
-      return this.setPosition({ y: y - 1, x });
-    }
-    if (this.direction == 'down') {
-      return this.setPosition({ y: y + 1, x });
-    }
-    if (this.direction == 'left') {
-      return this.setPosition({ y, x: x - 1 });
-    }
-    if (this.direction == 'right') {
-      return this.setPosition({ y, x: x + 1 });
-    }
-    throw new Error("移動できません(不明)");
+  changeDirection(direction: Direction) {
+    return this.create(this.id, this.position, direction, this.side, this.status, this.state, this.isAttacked);
   }
 
   isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
-    const { x, y } = this.position;
-    const debug = pieces.isEmpty(this.next({ x, y }));
-    if (pieces.isEmpty(this.next({ x, y }))) {
+    if (pieces.isEmpty(this.next())) {
       return false;
     }
-    const unit = pieces.getUnit(this.next({ x, y }));
+    const unit = pieces.getUnit(this.next());
     if (unit.side == this.side) {
       return false;
     }
@@ -352,15 +358,15 @@ export class Unit {
     if (!this.isAttackable({ field, pieces })) {
       throw new Error("攻撃可能な対象がありません")
     }
-    return pieces.getUnit(this.next(this.position));
+    return pieces.getUnit(this.next());
   }
   /**
    * 向いている方向の座標を返す
-   * @param position 位置
    * @param num いくつ進むか
    * @returns 
    */
-  next({ x, y }: { x: number, y: number }, num = 1) {
+  next(num = 1) {
+    const { x, y } = this.position;
     if (this.direction == 'up') {
       return { x, y: y - num };
     }
@@ -383,7 +389,7 @@ export class Unit {
     let result: Unit = this;
     let isMove = false;
     for (let i = 0; i < this.status.moveSpeed; i++) {
-      if (result.isMovavle({ field, pieces })) {
+      if (result.isMovable({ field, pieces })) {
         isMove = true;
         result = result.move({ field, pieces });
       }
@@ -394,7 +400,7 @@ export class Unit {
     return this;
   }
 
-  attackIfNeeded({ field, pieces }: { field: Field, pieces: Pieces }): OffenceAndDefence | null {
+  getOffenceAndDefence({ field, pieces }: { field: Field, pieces: Pieces }): OffenceAndDefence | null {
     if (this.state != "unprocessed") {
       return null;
     }
@@ -450,6 +456,16 @@ export class InfantryUnit extends Unit {
   ): Unit {
     return new InfantryUnit(id, position, direction, side, status, state, isAttacked);
   }
+
+  isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
+    const result = super.isMovable({ field, pieces });
+    if (!result) {
+      return false;
+    }
+    // 歩兵は草原または森を移動できる
+    const fieldType = field.getFieldType(this.next(1));
+    return fieldType == FieldType.grass || fieldType == FieldType.forest;
+  }
 }
 
 export class CavalryUnit extends Unit {
@@ -485,6 +501,16 @@ export class CavalryUnit extends Unit {
     isAttacked: boolean
   ): Unit {
     return new CavalryUnit(id, position, direction, side, status, state, isAttacked);
+  }
+
+  isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
+    const result = super.isMovable({ field, pieces });
+    if (!result) {
+      return false;
+    }
+    // 馬は草原のみ移動できる
+    const fieldType = field.getFieldType(this.next(1));
+    return fieldType == FieldType.grass;
   }
 }
 
@@ -534,7 +560,7 @@ export class ArcherUnit extends Unit {
     const { x, y } = this.position;
     // 向いている方向すべてに敵がいるかどうか
     for (let i = 1; i < 8; i++) {
-      const pos = this.next({ x, y }, i);
+      const pos = this.next(i);
       if (!pieces.isInBounds(pos)) {
         break;
       }
@@ -602,6 +628,15 @@ export class KingUnit extends Unit {
     isAttacked: boolean
   ): Unit {
     return new KingUnit(id, position, direction, side, status, state, isAttacked);
+  }
+
+  /**
+   * 王将は攻撃できない
+   * @param param0 
+   * @returns 
+   */
+  isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
+    return false;
   }
 }
 

@@ -1,4 +1,4 @@
-import { LogicalWar, Unit, UnitType } from "./domain/LogicalWar.ts";
+import { FieldType, LogicalWar, Unit, UnitType } from "./domain/LogicalWar.ts";
 const GRID_SIZE = 32;
 const p5: any = window;
 var game = LogicalWar.init();
@@ -7,78 +7,93 @@ p5.setup = function () {
 }
 var tick = 0;
 p5.draw = function () {
-  if (game.isGameOver()) {
-    p5.noLoop()
-    return;
-  }
   tick = (tick + 1) % 60;
   if (tick === 0) {
-    game = game.run().check().nextSide();
-    console.log(game.pieces.mapOther(unit => unit.status));
+    if (game.isGameOver()) {
+      if (game.isDeadEnemyKing) {
+        // p5.background(220);
+        p5.fill(0);
+        p5.textSize(32);
+        p5.text("You Win!", 100, 300);
+      }
+      if (game.isDeadFriendKing) {
+        // p5.background(220);
+        p5.fill(0);
+        p5.textSize(32);
+        p5.text("You Lose!", 100, 300);
+      }
+      p5.noLoop();
+      return;
+    }
+    game = game.run();
+    console.log(game.pieces.mapOther(unit => unit));
   }
-  if (game.isDeadEnemyKing) {
-    p5.background(220);
-    p5.fill(0);
-    p5.textSize(32);
-    p5.text("You Win!", 100, 100);
-    return;
-  }
-  if (game.isDeadFriendKing) {
-    p5.background(220);
-    p5.fill(0);
-    p5.textSize(32);
-    p5.text("You Lose!", 100, 100);
-    return;
-  }
+
   p5.background(220);
 
+
+  // フィールドの描画
   game.field.values.forEach((row, y) => {
     row.forEach((cell, x) => {
-      if (cell === 0) {
+      if (cell == FieldType.grass) {
         p5.fill(100, 255, 100);
-        p5.rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
       }
+      if (cell == FieldType.river) {
+        p5.fill(100, 100, 255);
+      }
+      if (cell == FieldType.forest) {
+        p5.fill(0, 100, 0);
+      }
+      p5.rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
     });
   });
 
+  // 駒の描画
   game.pieces.forEach((unit) => {
     if (unit.isDead) {
       return;
     }
     drawUnit(unit);
   });
+
+  if (tick === 0) {
+    game = game.nextSide();
+  }
 }
 
 function drawUnit(unit: Unit) {
   const { x, y } = unit.position;
   var baseColor = unit.side === 'friend' ? p5.color(255, 0, 0) : p5.color(0, 0, 255);
   // 攻撃を食らってるときは点滅する
-  baseColor = unit.isAttacked && tick % 2 == 0 ? p5.color(255, 255, 255) : baseColor;
+  baseColor = unit.isAttacked && tick % 2 == 0 && tick >= 20 && tick < 40 ? p5.color(255, 255, 255) : baseColor;
   p5.fill(baseColor);
+
+  // 攻撃をしてるとき揺れる
+  var attackMotion = tick % 3 == 0 && tick < 20 && unit.state == "attack" ? 4 : 0;
 
   if (unit.direction == 'up') {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE, (y + 1) * GRID_SIZE - attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE, (y + 1) * GRID_SIZE - attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE - attackMotion);
     p5.endShape(p5.CLOSE);
   } else if (unit.direction == 'down') {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, (y + 1) * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE, y * GRID_SIZE + attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE, y * GRID_SIZE + attackMotion);
+    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, (y + 1) * GRID_SIZE + attackMotion);
     p5.endShape(p5.CLOSE);
   } else if (unit.direction == 'left') {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE);
+    p5.vertex((x + 1) * GRID_SIZE - attackMotion, y * GRID_SIZE);
+    p5.vertex((x + 1) * GRID_SIZE - attackMotion, (y + 1) * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE - attackMotion, y * GRID_SIZE + GRID_SIZE / 2);
     p5.endShape(p5.CLOSE);
   } else if (unit.direction == 'right') {
     p5.beginShape();
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, y * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE, (y + 1) * GRID_SIZE);
-    p5.vertex(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE + attackMotion, y * GRID_SIZE);
+    p5.vertex(x * GRID_SIZE + attackMotion, (y + 1) * GRID_SIZE);
+    p5.vertex((x + 1) * GRID_SIZE + attackMotion, y * GRID_SIZE + GRID_SIZE / 2);
     p5.endShape(p5.CLOSE);
   }
 
@@ -94,19 +109,5 @@ function drawUnit(unit: Unit) {
     word = "弓"
   }
   p5.text(word, x * GRID_SIZE + GRID_SIZE / 4, y * GRID_SIZE + GRID_SIZE / 2);
-
-
-  // if (unit.side === 'friend') {
-
-  //   p5.fill(255);
-  //   // p5.rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-  //   if (unit.type == UnitType.Infantry) {
-  //     p5.fill(0);
-  //     p5.text("歩", x * GRID_SIZE, y * GRID_SIZE);
-  //   }
-  // } else if (unit.side === 'enemy') {
-  //   p5.fill(0);
-  //   p5.rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-  // }
 }
 
