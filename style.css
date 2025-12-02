@@ -1,0 +1,15 @@
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+canvas {
+  display: block;
+}
+
+button {
+  /* margin: 4px; */
+  /* width: 72px;
+  height: 36px; */
+  user-select: none;
+}

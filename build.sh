@@ -1,0 +1,1 @@
+deno bundle -o index.mjs ./src/index.ts
