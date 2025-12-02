@@ -281,7 +281,7 @@ export class Status {
 type UnitState = "unprocessed" | "moved" | "attack" | "wait";
 type OffenceAndDefence = { offence: Unit, defence: Unit };
 
-export class Unit {
+export abstract class Unit {
   readonly isDead: boolean;
   readonly isAlive: boolean;
   constructor(
