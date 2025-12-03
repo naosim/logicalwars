@@ -31,9 +31,6 @@ export class LogicalWar {
     // move
     for (let i = 0; i < 3; i++) {// 駒が並んで動けなくなったとき用。あんまりよくないアルゴリズム。
       pieces = pieces.map((unit) => {
-        if (unit.id == 'U0') {
-          console.log(unit);
-        }
         if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
           return unit.moveIfNeeded({ field: this.field, pieces: pieces });
         } else {
@@ -87,15 +84,7 @@ export class LogicalWar {
 
   attack({ offence, defence }: OffenceAndDefence) {
     console.log(offence, defence);
-    const pieces = this.pieces.map(unit => {
-      if (unit.id == offence.id) {
-        return offence.setState("attack");
-      }
-      if (unit.id == defence.id) {
-        return defence.attacked(offence.status.attackPoint);
-      }
-      return unit;
-    });
+    const pieces = this.pieces.attack({ offence, defence });
     // イミュータブルでない
     this.attackLog[this.turnCount].push({ offence, defence });
     const isDeadFriendKing = pieces.friendKing.isDead;
@@ -142,10 +131,10 @@ class Field {
 
 
 class Pieces {
-  values: Set<Unit>;
+  values: Map<string, Unit>;
   friendKing!: Unit;
   enemyKing!: Unit;
-  constructor(values: Set<Unit>) {
+  constructor(values: Map<string, Unit>) {
     this.values = values;
     Array.from(this.values.values()).forEach(unit => {
       if (unit.type == UnitType.King && unit.side == 'friend') {
@@ -158,6 +147,9 @@ class Pieces {
     if (!this.friendKing || !this.enemyKing) {
       throw new Error('King not found');
     }
+  }
+  static fromSet(values: Set<Unit>) {
+    return new Pieces(new Map(Array.from(values.keys()).map(v => ([v.id, v] as [string, Unit]))));
   }
   static init() {
     const createUnit = (v: string, x: number, y: number) => {
@@ -193,20 +185,23 @@ class Pieces {
      * right:3
      */
     const ary: Unit[] = formationText.trim().split('\n').map(v => v.trim()).flatMap((row, y) => row.split(',').map((v, x) => createUnit(v, x, y)).filter(v => v != null));
-    return new Pieces(new Set(ary))
+    return Pieces.fromSet(new Set(ary))
   }
   forEach(callback: (unit: Unit) => void) {
     this.values.forEach(callback);
   }
 
   map(callback: (unit: Unit) => Unit) {
-    const list = Array.from(this.values.values()).map(callback);
+    const list = this.toArray().map(callback);
     const sets = new Set(list);
-    return new Pieces(sets);
+    return Pieces.fromSet(sets);
+  }
+  toArray() {
+    return Array.from(this.values.values());
   }
 
   mapOther<T>(callback: (unit: Unit) => T) {
-    return Array.from(this.values.values()).map(callback);
+    return this.toArray().map(callback);
   }
 
   isInBounds(position: Position) {
@@ -216,7 +211,7 @@ class Pieces {
 
   isEmpty(position: Position) {
     const { x, y } = position;
-    for (const unit of this.values) {
+    for (const unit of this.values.values()) {
       if (unit.isAlive && unit.position.x == x && unit.position.y == y) {
         return false;
       }
@@ -226,12 +221,32 @@ class Pieces {
 
   getUnit(position: Position) {
     const { x, y } = position;
-    for (const unit of this.values) {
+    for (const unit of this.values.values()) {
       if (unit.isAlive && unit.position.x == x && unit.position.y == y) {
         return unit;
       }
     }
     throw new Error('該当するユニットがありません');
+  }
+  findById(id: string) {
+    const result = this.values.get(id);
+    if (!result) {
+      throw new Error('該当するユニットがありません');
+    }
+    return result;
+  }
+  private copyy() {
+    return new Pieces(new Map(this.values));
+  }
+
+  attack({ offence, defence }: OffenceAndDefence) {
+    const o = this.findById(offence.id);
+    const d = this.findById(defence.id);
+
+    const newPieces = this.copyy();
+    newPieces.values.set(o.id, o.setState("attack"));
+    newPieces.values.set(d.id, d.attacked(offence.status.attackPoint));
+    return newPieces;
   }
 }
 

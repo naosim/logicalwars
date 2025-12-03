@@ -11,13 +11,13 @@ var stageText = `
 `;
 var formationText = `
 00,00,00,i1,k1,00,00,00
-00,00,00,i1,i1,00,00,00
-00,00,00,i1,00,00,00,00
+00,00,00,00,i1,00,00,00
 00,00,00,00,00,00,00,00
 00,00,00,00,00,00,00,00
 00,00,00,00,00,00,00,00
-00,00,00,a0,00,00,00,c0
-c0,00,00,k0,c0,00,i0,00
+00,00,00,00,00,00,00,00
+00,00,00,i0,00,00,00,00
+00,00,00,k0,c0,00,i0,00
 `;
 
 // src/domain/LogicalWar.ts
@@ -55,9 +55,6 @@ var LogicalWar = class _LogicalWar {
     var pieces = this.pieces.map((unit) => unit.reset());
     for (let i = 0; i < 3; i++) {
       pieces = pieces.map((unit) => {
-        if (unit.id == "U0") {
-          console.log(unit);
-        }
         if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
           return unit.moveIfNeeded({
             field: this.field,
@@ -109,14 +106,9 @@ var LogicalWar = class _LogicalWar {
   }
   attack({ offence, defence }) {
     console.log(offence, defence);
-    const pieces = this.pieces.map((unit) => {
-      if (unit.id == offence.id) {
-        return offence.setState("attack");
-      }
-      if (unit.id == defence.id) {
-        return defence.attacked(offence.status.attackPoint);
-      }
-      return unit;
+    const pieces = this.pieces.attack({
+      offence,
+      defence
     });
     this.attackLog[this.turnCount].push({
       offence,
@@ -164,6 +156,12 @@ var Pieces = class _Pieces {
       throw new Error("King not found");
     }
   }
+  static fromSet(values) {
+    return new _Pieces(new Map(Array.from(values.keys()).map((v) => [
+      v.id,
+      v
+    ])));
+  }
   static init() {
     const createUnit = (v, x, y) => {
       if (v == "00") {
@@ -198,18 +196,21 @@ var Pieces = class _Pieces {
       }
     };
     const ary = formationText.trim().split("\n").map((v) => v.trim()).flatMap((row, y) => row.split(",").map((v, x) => createUnit(v, x, y)).filter((v) => v != null));
-    return new _Pieces(new Set(ary));
+    return _Pieces.fromSet(new Set(ary));
   }
   forEach(callback) {
     this.values.forEach(callback);
   }
   map(callback) {
-    const list = Array.from(this.values.values()).map(callback);
+    const list = this.toArray().map(callback);
     const sets = new Set(list);
-    return new _Pieces(sets);
+    return _Pieces.fromSet(sets);
+  }
+  toArray() {
+    return Array.from(this.values.values());
   }
   mapOther(callback) {
-    return Array.from(this.values.values()).map(callback);
+    return this.toArray().map(callback);
   }
   isInBounds(position) {
     const { x, y } = position;
@@ -217,7 +218,7 @@ var Pieces = class _Pieces {
   }
   isEmpty(position) {
     const { x, y } = position;
-    for (const unit of this.values) {
+    for (const unit of this.values.values()) {
       if (unit.isAlive && unit.position.x == x && unit.position.y == y) {
         return false;
       }
@@ -226,12 +227,30 @@ var Pieces = class _Pieces {
   }
   getUnit(position) {
     const { x, y } = position;
-    for (const unit of this.values) {
+    for (const unit of this.values.values()) {
       if (unit.isAlive && unit.position.x == x && unit.position.y == y) {
         return unit;
       }
     }
     throw new Error("\u8A72\u5F53\u3059\u308B\u30E6\u30CB\u30C3\u30C8\u304C\u3042\u308A\u307E\u305B\u3093");
+  }
+  findById(id2) {
+    const result = this.values.get(id2);
+    if (!result) {
+      throw new Error("\u8A72\u5F53\u3059\u308B\u30E6\u30CB\u30C3\u30C8\u304C\u3042\u308A\u307E\u305B\u3093");
+    }
+    return result;
+  }
+  copyy() {
+    return new _Pieces(new Map(this.values));
+  }
+  attack({ offence, defence }) {
+    const o = this.findById(offence.id);
+    const d = this.findById(defence.id);
+    const newPieces = this.copyy();
+    newPieces.values.set(o.id, o.setState("attack"));
+    newPieces.values.set(d.id, d.attacked(offence.status.attackPoint));
+    return newPieces;
   }
 };
 var UnitType = /* @__PURE__ */ function(UnitType2) {
