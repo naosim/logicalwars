@@ -17,6 +17,6 @@ sh build.sh
 stateDiagram-v2
     unprocessed --> moved:動ける
     unprocessed --> frontAttacked:前に攻撃
-    unprocessed --> attacked:攻撃
-    frontAttacked --> moved:動ける
+    unprocessed --> attack:攻撃
+    frontAttack --> moved:動ける
 ```

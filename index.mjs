@@ -152,12 +152,16 @@ var Pieces = class _Pieces {
   copyy() {
     return new _Pieces(new Map(this.values));
   }
-  attack({ offence, defence }) {
-    const o = this.findById(offence.id);
-    const d = this.findById(defence.id);
+  attack(offenceAndDefence) {
+    const o = this.findById(offenceAndDefence.offence.id);
+    const d = this.findById(offenceAndDefence.defence.id);
     const newPieces = this.copyy();
-    newPieces.values.set(o.id, o.setState("attack"));
-    newPieces.values.set(d.id, d.attacked(offence.status.attackPoint));
+    const newDifence = d.attacked(offenceAndDefence.offence.status.attackPoint);
+    if (newDifence.isDead) {
+      console.log("dead", newDifence);
+    }
+    newPieces.values.set(d.id, newDifence);
+    newPieces.values.set(o.id, o.setState(newDifence.isDead && offenceAndDefence.isFrontAttack() ? "frontAttack" : "attack"));
     return newPieces;
   }
   run({ side, field }) {
@@ -200,9 +204,20 @@ var Pieces = class _Pieces {
         return null;
       }
     }).filter((v) => v != null);
-    const attackedPieces = offenceAndDefenceList.reduce((memo, v) => {
+    var attackedPieces = offenceAndDefenceList.reduce((memo, v) => {
       return memo.attack(v);
     }, pieces);
+    attackedPieces = attackedPieces.map((unit) => {
+      if (side == unit.side && unit.state == "frontAttack" && unit.isAlive) {
+        console.log("frontAttack", unit);
+        return unit.moveIfNeeded({
+          field,
+          pieces: attackedPieces
+        });
+      } else {
+        return unit;
+      }
+    });
     return attackedPieces;
   }
 };
@@ -236,6 +251,21 @@ var Hp = class _Hp {
     return new _Hp(this.value - attackPoint + status.defencePoint);
   }
 };
+var OffenceAndDefence = class {
+  offence;
+  defence;
+  constructor(offence, defence) {
+    this.offence = offence;
+    this.defence = defence;
+  }
+  isFrontAttack() {
+    if (this.offence.status.moveSpeed == 0) {
+      return false;
+    }
+    const nextPos = this.offence.next(1);
+    return this.defence.position.x == nextPos.x && this.defence.position.y == nextPos.y;
+  }
+};
 var Unit = class {
   primitive;
   id;
@@ -248,6 +278,7 @@ var Unit = class {
   side;
   position;
   direction;
+  isAttacked;
   constructor(primitive) {
     this.primitive = primitive;
     this.id = this.primitive.id;
@@ -260,6 +291,7 @@ var Unit = class {
     this.side = this.primitive.side;
     this.position = this.primitive.position;
     this.direction = this.primitive.direction;
+    this.isAttacked = this.primitive.isAttacked;
   }
   create(primitive) {
     throw new Error("abstract method");
@@ -339,10 +371,7 @@ var Unit = class {
         field,
         pieces
       });
-      return {
-        offence,
-        defence
-      };
+      return new OffenceAndDefence(offence, defence);
     } else {
       return null;
     }
@@ -440,12 +469,13 @@ var UnitPrimitive = class _UnitPrimitive {
     };
   }
   moveIfNeeded({ field, pieces }) {
-    if (this.state != "unprocessed") {
+    if (this.state != "unprocessed" && this.state != "frontAttack") {
       return this;
     }
+    const moveSpeed = this.state == "frontAttack" ? 1 : this.status.moveSpeed;
     let result = this;
     let isMove = false;
-    for (let i = 0; i < this.status.moveSpeed; i++) {
+    for (let i = 0; i < moveSpeed; i++) {
       if (result.isMovable({
         field,
         pieces
@@ -642,16 +672,9 @@ var LogicalWar = class _LogicalWar {
   isGameOver() {
     return this.isDeadFriendKing || this.isDeadEnemyKing;
   }
-  attack({ offence, defence }) {
-    console.log(offence, defence);
-    const pieces = this.pieces.attack({
-      offence,
-      defence
-    });
-    this.attackLog[this.turnCount].push({
-      offence,
-      defence
-    });
+  attack(offenceAndDefence) {
+    const pieces = this.pieces.attack(offenceAndDefence);
+    this.attackLog[this.turnCount].push(offenceAndDefence);
     const isDeadFriendKing = pieces.friendKing.isDead;
     const isDeadEnemyKing = pieces.enemyKing.isDead;
     return new _LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
@@ -684,7 +707,6 @@ p5.draw = function() {
       return;
     }
     game = game.run();
-    console.log(game.pieces.mapOther((unit) => unit));
   }
   p5.background(220);
   game.field.values.forEach((row, y) => {

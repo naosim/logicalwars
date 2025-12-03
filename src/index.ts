@@ -26,7 +26,7 @@ p5.draw = function () {
       return;
     }
     game = game.run();
-    console.log(game.pieces.mapOther(unit => unit));
+    // console.log(game.pieces.mapOther(unit => unit));
   }
 
   p5.background(220);

@@ -115,13 +115,17 @@ export class Pieces {
     return new Pieces(new Map(this.values));
   }
 
-  attack({ offence, defence }: OffenceAndDefence) {
-    const o = this.findById(offence.id);
-    const d = this.findById(defence.id);
+  attack(offenceAndDefence: OffenceAndDefence) {
+    const o = this.findById(offenceAndDefence.offence.id);
+    const d = this.findById(offenceAndDefence.defence.id);
 
     const newPieces = this.copyy();
-    newPieces.values.set(o.id, o.setState("attack"));
-    newPieces.values.set(d.id, d.attacked(offence.status.attackPoint));
+    const newDifence = d.attacked(offenceAndDefence.offence.status.attackPoint);
+    if (newDifence.isDead) {
+      console.log("dead", newDifence);
+    }
+    newPieces.values.set(d.id, newDifence);
+    newPieces.values.set(o.id, o.setState(newDifence.isDead && offenceAndDefence.isFrontAttack() ? "frontAttack" : "attack"));
     return newPieces;
   }
 
@@ -164,9 +168,19 @@ export class Pieces {
         return null;
       }
     }).filter(v => v != null);
-    const attackedPieces = offenceAndDefenceList.reduce((memo, v) => {
+    var attackedPieces = offenceAndDefenceList.reduce((memo, v) => {
       return memo.attack(v);
     }, pieces);
+
+    // frontAttackは一歩進む
+    attackedPieces = attackedPieces.map((unit) => {
+      if (side == unit.side && unit.state == "frontAttack" && unit.isAlive) {
+        console.log("frontAttack", unit);
+        return unit.moveIfNeeded({ field: field, pieces: attackedPieces });
+      } else {
+        return unit;
+      }
+    });
 
     return attackedPieces;
   }
@@ -207,8 +221,25 @@ export class Hp {
   }
 }
 
-export type UnitState = "unprocessed" | "moved" | "attack" | "wait";
-export type OffenceAndDefence = { offence: Unit, defence: Unit };
+export type UnitState = "unprocessed" | "moved" | "attack" | "frontAttack" | "wait";
+
+export class OffenceAndDefence {
+  constructor(
+    readonly offence: Unit,
+    readonly defence: Unit
+  ) {
+  }
+  isFrontAttack() {
+    // return false;
+    // 移動型でない場合は前攻撃ではない
+    if (this.offence.status.moveSpeed == 0) {
+      return false;
+    }
+    const nextPos = this.offence.next(1);
+    return this.defence.position.x == nextPos.x && this.defence.position.y == nextPos.y;
+  }
+}
+// export type OffenceAndDefence = { offence: Unit, defence: Unit, offenceType: "front" | "other" };
 
 export abstract class Unit {
   readonly id: string;
@@ -221,6 +252,7 @@ export abstract class Unit {
   readonly side: Side;
   readonly position: Position;
   readonly direction: Direction;
+  readonly isAttacked: boolean;
   constructor(
     readonly primitive: UnitPrimitive
   ) {
@@ -234,6 +266,7 @@ export abstract class Unit {
     this.side = this.primitive.side;
     this.position = this.primitive.position;
     this.direction = this.primitive.direction;
+    this.isAttacked = this.primitive.isAttacked;
   }
   create(
     primitive: UnitPrimitive
@@ -309,7 +342,7 @@ export abstract class Unit {
       console.log("atack")
       const offence = this;
       const defence = this.getAttackTarget({ field, pieces });
-      return { offence, defence };
+      return new OffenceAndDefence(offence, defence);
     } else {
       return null;
     }
@@ -390,12 +423,13 @@ export class UnitPrimitive {
   }
 
   moveIfNeeded({ field, pieces }: { field: Field, pieces: Pieces }) {
-    if (this.state != "unprocessed") {
+    if (this.state != "unprocessed" && this.state != "frontAttack") {
       return this;
     }
+    const moveSpeed = this.state == "frontAttack" ? 1 : this.status.moveSpeed;
     let result: UnitPrimitive = this;
     let isMove = false;
-    for (let i = 0; i < this.status.moveSpeed; i++) {
+    for (let i = 0; i < moveSpeed; i++) {
       if (result.isMovable({ field, pieces })) {
         isMove = true;
         result = result.move({ field, pieces });

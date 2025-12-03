@@ -46,11 +46,11 @@ export class LogicalWar {
     return this.isDeadFriendKing || this.isDeadEnemyKing;
   }
 
-  attack({ offence, defence }: OffenceAndDefence) {
-    console.log(offence, defence);
-    const pieces = this.pieces.attack({ offence, defence });
+  attack(offenceAndDefence: OffenceAndDefence) {
+    // console.log(offence, defence);
+    const pieces = this.pieces.attack(offenceAndDefence);
     // イミュータブルでない
-    this.attackLog[this.turnCount].push({ offence, defence });
+    this.attackLog[this.turnCount].push(offenceAndDefence);
     const isDeadFriendKing = pieces.friendKing.isDead;
     const isDeadEnemyKing = pieces.enemyKing.isDead;
     return new LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
