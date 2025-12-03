@@ -140,29 +140,24 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 export type Side = 'friend' | 'enemy';
 
 export class Status {
-  isDead: boolean;
   constructor(
-    readonly hp: number,
+    readonly maxHp: number,
     readonly attackPoint: number,
     readonly defencePoint: number,
     readonly moveSpeed: number,
   ) {
-    this.isDead = hp <= 0;
   }
-  setHp(value: number) {
-    return new Status(value, this.attackPoint, this.defencePoint, this.moveSpeed);
+}
+
+export class Hp {
+  isDead:boolean;
+  constructor(
+    readonly value: number
+  ) {
+    this.isDead = value <= 0;
   }
-  setAttackPoint(value: number) {
-    return new Status(this.hp, value, this.defencePoint, this.moveSpeed);
-  }
-  setDefencePoint(value: number) {
-    return new Status(this.hp, this.attackPoint, value, this.moveSpeed);
-  }
-  setMoveSpeed(value: number) {
-    return new Status(this.hp, this.attackPoint, this.defencePoint, value);
-  }
-  attacked(power: number) {
-    return new Status(this.hp - power, this.attackPoint, this.defencePoint, this.moveSpeed);
+  attacked(attackPoint: number, status: Status) {
+    return new Hp(this.value - attackPoint + status.defencePoint);
   }
 }
 
@@ -178,11 +173,12 @@ export abstract class Unit {
     readonly position: Position,
     readonly direction: Direction,
     readonly side: Side,
+    readonly hp:Hp,
     readonly status: Status,
     readonly state: UnitState,
     readonly isAttacked: boolean
   ) {
-    this.isDead = this.status.isDead;
+    this.isDead = this.hp.isDead;
     this.isAlive = !this.isDead;
   }
   create(
@@ -190,6 +186,7 @@ export abstract class Unit {
     position: Position,
     direction: Direction,
     side: Side,
+    hp:Hp,
     status: Status,
     state: UnitState,
     isAttacked: boolean
@@ -206,8 +203,8 @@ export abstract class Unit {
     if (power == 0) {
       return this;
     }
-    const status = this.status.attacked(power);
-    return this.create(this.id, this.position, this.direction, this.side, status, this.state, true);
+    const hp = this.hp.attacked(power, this.status);
+    return this.create(this.id, this.position, this.direction, this.side, hp, this.status, this.state, true);
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -216,7 +213,7 @@ export abstract class Unit {
   }
 
   setPosition(position: Position) {
-    return this.create(this.id, position, this.direction, this.side, this.status, this.state, this.isAttacked);
+    return this.create(this.id, position, this.direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
 
   move({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -228,7 +225,7 @@ export abstract class Unit {
   }
 
   changeDirection(direction: Direction) {
-    return this.create(this.id, this.position, direction, this.side, this.status, this.state, this.isAttacked);
+    return this.create(this.id, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
 
   isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -305,7 +302,7 @@ export abstract class Unit {
 
   setState(value: UnitState) {
     const isAttacked = value == 'unprocessed' ? false : this.isAttacked;
-    return this.create(this.id, this.position, this.direction, this.side, this.status, value, isAttacked);
+    return this.create(this.id, this.position, this.direction, this.side, this.hp, this.status, value, isAttacked);
   }
 }
 
@@ -315,12 +312,13 @@ export class InfantryUnit extends Unit {
     readonly position: Position,
     readonly direction: Direction,
     readonly side: Side,
+    readonly hp:Hp,
     readonly status: Status,
     readonly state: UnitState,
     readonly isAttacked: boolean
   ) {
 
-    super(id, UnitType.Infantry, position, direction, side, status, state, isAttacked);
+    super(id, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked);
   }
   static init(
     id: string,
@@ -331,18 +329,20 @@ export class InfantryUnit extends Unit {
     isAttacked: boolean
   ) {
     const status = new Status(10, 1, 1, 1);
-    return new InfantryUnit(id, position, direction, side, status, state, isAttacked);
+    const hp = new Hp(status.maxHp);
+    return new InfantryUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
   create(
     id: string,
     position: Position,
     direction: Direction,
     side: Side,
+    hp:Hp,
     status: Status,
     state: UnitState,
     isAttacked: boolean
   ): Unit {
-    return new InfantryUnit(id, position, direction, side, status, state, isAttacked);
+    return new InfantryUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -362,11 +362,12 @@ export class CavalryUnit extends Unit {
     readonly position: Position,
     readonly direction: Direction,
     readonly side: Side,
+    readonly hp:Hp,
     readonly status: Status,
     readonly state: UnitState,
     readonly isAttacked: boolean
   ) {
-    super(id, UnitType.Cavalry, position, direction, side, status, state, isAttacked);
+    super(id, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked);
   }
   static init(
     id: string,
@@ -377,18 +378,20 @@ export class CavalryUnit extends Unit {
     isAttacked: boolean
   ) {
     const status = new Status(10, 5, 1, 2);
-    return new CavalryUnit(id, position, direction, side, status, state, isAttacked);
+    const hp = new Hp(status.maxHp);
+    return new CavalryUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
   create(
     id: string,
     position: Position,
     direction: Direction,
     side: Side,
+    hp:Hp,
     status: Status,
     state: UnitState,
     isAttacked: boolean
   ): Unit {
-    return new CavalryUnit(id, position, direction, side, status, state, isAttacked);
+    return new CavalryUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -408,12 +411,13 @@ export class ArcherUnit extends Unit {
     readonly position: Position,
     readonly direction: Direction,
     readonly side: Side,
+    readonly hp:Hp,
     readonly status: Status,
     readonly state: UnitState,
     readonly isAttacked: boolean
   ) {
 
-    super(id, UnitType.Archer, position, direction, side, status, state, isAttacked);
+    super(id, UnitType.Archer, position, direction, side, hp, status, state, isAttacked);
   }
 
   static init(
@@ -425,18 +429,20 @@ export class ArcherUnit extends Unit {
     isAttacked: boolean
   ) {
     const status = new Status(10, 4, 1, 0);
-    return new ArcherUnit(id, position, direction, side, status, state, isAttacked);
+    const hp = new Hp(status.maxHp);
+    return new ArcherUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
   create(
     id: string,
     position: Position,
     direction: Direction,
     side: Side,
+    hp:Hp,
     status: Status,
     state: UnitState,
     isAttacked: boolean
   ): Unit {
-    return new ArcherUnit(id, position, direction, side, status, state, isAttacked);
+    return new ArcherUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
 
   /**
@@ -487,11 +493,12 @@ export class KingUnit extends Unit {
     readonly position: Position,
     readonly direction: Direction,
     readonly side: Side,
+    readonly hp:Hp,
     readonly status: Status,
     readonly state: UnitState,
     readonly isAttacked: boolean
   ) {
-    super(id, UnitType.King, position, direction, side, status, state, isAttacked);
+    super(id, UnitType.King, position, direction, side, hp, status, state, isAttacked);
   }
 
   static init(
@@ -503,7 +510,8 @@ export class KingUnit extends Unit {
     isAttacked: boolean
   ) {
     const status = new Status(1, 0, 0, 0);
-    return new KingUnit(id, position, direction, side, status, state, isAttacked);
+    const hp = new Hp(status.maxHp);
+    return new KingUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
 
   create(
@@ -511,11 +519,12 @@ export class KingUnit extends Unit {
     position: Position,
     direction: Direction,
     side: Side,
+    hp:Hp,
     status: Status,
     state: UnitState,
     isAttacked: boolean
   ): Unit {
-    return new KingUnit(id, position, direction, side, status, state, isAttacked);
+    return new KingUnit(id, position, direction, side, hp, status, state, isAttacked);
   }
 
   /**
