@@ -1,3 +1,24 @@
+// src/domain/field.ts
+var FieldType = /* @__PURE__ */ function(FieldType2) {
+  FieldType2[FieldType2["grass"] = 0] = "grass";
+  FieldType2[FieldType2["river"] = 1] = "river";
+  FieldType2[FieldType2["forest"] = 2] = "forest";
+  return FieldType2;
+}({});
+var Field = class _Field {
+  values;
+  constructor(values) {
+    this.values = values;
+  }
+  getFieldType(position) {
+    return this.values[position.y][position.x];
+  }
+  static init(stageText2) {
+    const values = stageText2.trim().split("\n").map((v) => v.trim()).map((row) => row.split("").map(Number));
+    return new _Field(values);
+  }
+};
+
 // src/domain/stage.ts
 var stageText = `
 00000000
@@ -20,128 +41,11 @@ var formationText = `
 00,00,00,k0,c0,00,i0,00
 `;
 
-// src/domain/LogicalWar.ts
-var LogicalWar = class _LogicalWar {
-  field;
-  pieces;
-  isDeadFriendKing;
-  isDeadEnemyKing;
-  side;
-  attackLog;
-  turnCount;
-  constructor(field, pieces, isDeadFriendKing, isDeadEnemyKing, side, attackLog, turnCount) {
-    this.field = field;
-    this.pieces = pieces;
-    this.isDeadFriendKing = isDeadFriendKing;
-    this.isDeadEnemyKing = isDeadEnemyKing;
-    this.side = side;
-    this.attackLog = attackLog;
-    this.turnCount = turnCount;
-    if (!attackLog[turnCount]) {
-      attackLog[turnCount] = [];
-    }
-  }
-  static init() {
-    const field = Field.init(stageText);
-    const pieces = Pieces.init(formationText);
-    const isDeadFriendKing = false;
-    const isDeadEnemyKing = false;
-    const side = "enemy";
-    const attackLog = [];
-    const turnCount = 0;
-    return new _LogicalWar(field, pieces, isDeadFriendKing, isDeadEnemyKing, side, attackLog, turnCount);
-  }
-  run() {
-    var pieces = this.pieces.map((unit) => unit.reset());
-    for (let i = 0; i < 3; i++) {
-      pieces = pieces.map((unit) => {
-        if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
-          return unit.moveIfNeeded({
-            field: this.field,
-            pieces
-          });
-        } else {
-          return unit;
-        }
-      });
-    }
-    pieces = pieces.map((unit) => {
-      if (unit.isDead) {
-        return unit;
-      }
-      if (this.side != unit.side) {
-        return unit;
-      }
-      const otherKing = this.side == "friend" ? this.pieces.enemyKing : this.pieces.friendKing;
-      const goalY = this.side == "friend" ? 0 : 7;
-      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
-      if (unit.position.y == goalY) {
-        return unit.changeDirection(leftOrRight);
-      } else {
-        return unit;
-      }
-    });
-    const offenceAndDefenceList = pieces.mapOther((unit) => {
-      if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
-        return unit.getOffenceAndDefence({
-          field: this.field,
-          pieces
-        });
-      } else {
-        return null;
-      }
-    }).filter((v) => v != null);
-    const movedGame = new _LogicalWar(this.field, pieces, this.isDeadFriendKing, this.isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
-    const attackedGame = offenceAndDefenceList.reduce((memo, v) => {
-      return memo.attack(v);
-    }, movedGame);
-    return attackedGame;
-  }
-  nextSide() {
-    const side = this.side == "friend" ? "enemy" : "friend";
-    return new _LogicalWar(this.field, this.pieces, this.isDeadFriendKing, this.isDeadEnemyKing, side, this.attackLog, this.turnCount + 1);
-  }
-  isGameOver() {
-    return this.isDeadFriendKing || this.isDeadEnemyKing;
-  }
-  attack({ offence, defence }) {
-    console.log(offence, defence);
-    const pieces = this.pieces.attack({
-      offence,
-      defence
-    });
-    this.attackLog[this.turnCount].push({
-      offence,
-      defence
-    });
-    const isDeadFriendKing = pieces.friendKing.isDead;
-    const isDeadEnemyKing = pieces.enemyKing.isDead;
-    return new _LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
-  }
-};
+// src/domain/unit.ts
 var _id = 0;
 function id() {
   return `U${_id++}`;
 }
-var FieldType = /* @__PURE__ */ function(FieldType2) {
-  FieldType2[FieldType2["grass"] = 0] = "grass";
-  FieldType2[FieldType2["river"] = 1] = "river";
-  FieldType2[FieldType2["forest"] = 2] = "forest";
-  return FieldType2;
-}({});
-var Field = class _Field {
-  values;
-  constructor(values) {
-    this.values = values;
-  }
-  getFieldType(position) {
-    return this.values[position.y][position.x];
-  }
-  static init(stageText2) {
-    const values = stageText2.trim().split("\n").map((v) => v.trim()).map((row) => row.split("").map(Number));
-    return new _Field(values);
-  }
-};
 var Pieces = class _Pieces {
   values;
   friendKing;
@@ -600,6 +504,106 @@ var KingUnit = class _KingUnit extends Unit {
    */
   isAttackable({ field, pieces }) {
     return false;
+  }
+};
+
+// src/domain/LogicalWar.ts
+var LogicalWar = class _LogicalWar {
+  field;
+  pieces;
+  isDeadFriendKing;
+  isDeadEnemyKing;
+  side;
+  attackLog;
+  turnCount;
+  constructor(field, pieces, isDeadFriendKing, isDeadEnemyKing, side, attackLog, turnCount) {
+    this.field = field;
+    this.pieces = pieces;
+    this.isDeadFriendKing = isDeadFriendKing;
+    this.isDeadEnemyKing = isDeadEnemyKing;
+    this.side = side;
+    this.attackLog = attackLog;
+    this.turnCount = turnCount;
+    if (!attackLog[turnCount]) {
+      attackLog[turnCount] = [];
+    }
+  }
+  static init() {
+    const field = Field.init(stageText);
+    const pieces = Pieces.init(formationText);
+    const isDeadFriendKing = false;
+    const isDeadEnemyKing = false;
+    const side = "enemy";
+    const attackLog = [];
+    const turnCount = 0;
+    return new _LogicalWar(field, pieces, isDeadFriendKing, isDeadEnemyKing, side, attackLog, turnCount);
+  }
+  run() {
+    var pieces = this.pieces.map((unit) => unit.reset());
+    for (let i = 0; i < 3; i++) {
+      pieces = pieces.map((unit) => {
+        if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+          return unit.moveIfNeeded({
+            field: this.field,
+            pieces
+          });
+        } else {
+          return unit;
+        }
+      });
+    }
+    pieces = pieces.map((unit) => {
+      if (unit.isDead) {
+        return unit;
+      }
+      if (this.side != unit.side) {
+        return unit;
+      }
+      const otherKing = this.side == "friend" ? this.pieces.enemyKing : this.pieces.friendKing;
+      const goalY = this.side == "friend" ? 0 : 7;
+      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
+      if (unit.position.y == goalY) {
+        return unit.changeDirection(leftOrRight);
+      } else {
+        return unit;
+      }
+    });
+    const offenceAndDefenceList = pieces.mapOther((unit) => {
+      if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+        return unit.getOffenceAndDefence({
+          field: this.field,
+          pieces
+        });
+      } else {
+        return null;
+      }
+    }).filter((v) => v != null);
+    const movedGame = new _LogicalWar(this.field, pieces, this.isDeadFriendKing, this.isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
+    const attackedGame = offenceAndDefenceList.reduce((memo, v) => {
+      return memo.attack(v);
+    }, movedGame);
+    return attackedGame;
+  }
+  nextSide() {
+    const side = this.side == "friend" ? "enemy" : "friend";
+    return new _LogicalWar(this.field, this.pieces, this.isDeadFriendKing, this.isDeadEnemyKing, side, this.attackLog, this.turnCount + 1);
+  }
+  isGameOver() {
+    return this.isDeadFriendKing || this.isDeadEnemyKing;
+  }
+  attack({ offence, defence }) {
+    console.log(offence, defence);
+    const pieces = this.pieces.attack({
+      offence,
+      defence
+    });
+    this.attackLog[this.turnCount].push({
+      offence,
+      defence
+    });
+    const isDeadFriendKing = pieces.friendKing.isDead;
+    const isDeadEnemyKing = pieces.enemyKing.isDead;
+    return new _LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
   }
 };
 
