@@ -16,8 +16,8 @@ export class LogicalWar {
   }
 
   static init() {
-    const field = new Field();
-    const pieces = Pieces.init();
+    const field = Field.init(stageText);
+    const pieces = Pieces.init(formationText);
     const isDeadFriendKing = false;
     const isDeadEnemyKing = false;
     const side: Side = 'enemy';
@@ -117,14 +117,16 @@ export enum FieldType {
   forest = 2,
 }
 
-class Field {
-  values: FieldType[][];
-  constructor() {
-    // 8x8の2次元配列を生成する
-    this.values = stageText.trim().split('\n').map(v => v.trim()).map(row => row.split('').map(Number));
+export class Field {
+  constructor(readonly values:FieldType[][]) {
   }
   getFieldType(position: Position) {
     return this.values[position.y][position.x];
+  }
+  static init(stageText: string) {
+    // 8x8の2次元配列を生成する
+    const values = stageText.trim().split('\n').map(v => v.trim()).map(row => row.split('').map(Number));
+    return new Field(values);
   }
 }
 
@@ -151,7 +153,7 @@ class Pieces {
   static fromSet(values: Set<Unit>) {
     return new Pieces(new Map(Array.from(values.keys()).map(v => ([v.id, v] as [string, Unit]))));
   }
-  static init() {
+  static init(formationText:string) {
     const createUnit = (v: string, x: number, y: number) => {
       if (v == '00') {
         return null;

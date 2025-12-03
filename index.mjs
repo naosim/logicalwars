@@ -42,8 +42,8 @@ var LogicalWar = class _LogicalWar {
     }
   }
   static init() {
-    const field = new Field();
-    const pieces = Pieces.init();
+    const field = Field.init(stageText);
+    const pieces = Pieces.init(formationText);
     const isDeadFriendKing = false;
     const isDeadEnemyKing = false;
     const side = "enemy";
@@ -129,13 +129,17 @@ var FieldType = /* @__PURE__ */ function(FieldType2) {
   FieldType2[FieldType2["forest"] = 2] = "forest";
   return FieldType2;
 }({});
-var Field = class {
+var Field = class _Field {
   values;
-  constructor() {
-    this.values = stageText.trim().split("\n").map((v) => v.trim()).map((row) => row.split("").map(Number));
+  constructor(values) {
+    this.values = values;
   }
   getFieldType(position) {
     return this.values[position.y][position.x];
+  }
+  static init(stageText2) {
+    const values = stageText2.trim().split("\n").map((v) => v.trim()).map((row) => row.split("").map(Number));
+    return new _Field(values);
   }
 };
 var Pieces = class _Pieces {
@@ -162,7 +166,7 @@ var Pieces = class _Pieces {
       v
     ])));
   }
-  static init() {
+  static init(formationText2) {
     const createUnit = (v, x, y) => {
       if (v == "00") {
         return null;
@@ -195,7 +199,7 @@ var Pieces = class _Pieces {
         }, direction, side, "unprocessed", false);
       }
     };
-    const ary = formationText.trim().split("\n").map((v) => v.trim()).flatMap((row, y) => row.split(",").map((v, x) => createUnit(v, x, y)).filter((v) => v != null));
+    const ary = formationText2.trim().split("\n").map((v) => v.trim()).flatMap((row, y) => row.split(",").map((v, x) => createUnit(v, x, y)).filter((v) => v != null));
     return _Pieces.fromSet(new Set(ary));
   }
   forEach(callback) {
