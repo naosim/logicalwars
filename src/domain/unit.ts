@@ -124,6 +124,52 @@ export class Pieces {
     newPieces.values.set(d.id, d.attacked(offence.status.attackPoint));
     return newPieces;
   }
+
+  run({ side, field }: { side: Side, field: Field }) {
+    var pieces = this.map(unit => unit.reset());
+    // move
+    for (let i = 0; i < 3; i++) {// 駒が並んで動けなくなったとき用。あんまりよくないアルゴリズム。
+      pieces = pieces.map((unit) => {
+        if (side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+          return unit.moveIfNeeded({ field: field, pieces: pieces });
+        } else {
+          return unit;
+        }
+      });
+    }
+
+    // 奥に到達したら方向を変える
+    pieces = pieces.map(unit => {
+      if (unit.isDead) {
+        return unit;
+      }
+      if (side != unit.side) {
+        return unit;
+      }
+      const otherKing = side == 'friend' ? pieces.enemyKing : pieces.friendKing;
+      const goalY = side == 'friend' ? 0 : 7;
+      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
+      if (unit.position.y == goalY) {
+        return unit.changeDirection(leftOrRight);
+      } else {
+        return unit;
+      }
+    });
+
+    // attack
+    const offenceAndDefenceList: OffenceAndDefence[] = pieces.mapOther(unit => {
+      if (side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+        return unit.getOffenceAndDefence({ field: field, pieces: pieces });
+      } else {
+        return null;
+      }
+    }).filter(v => v != null);
+    const attackedPieces = offenceAndDefenceList.reduce((memo, v) => {
+      return memo.attack(v);
+    }, pieces);
+
+    return attackedPieces;
+  }
 }
 
 export enum UnitType {

@@ -160,6 +160,51 @@ var Pieces = class _Pieces {
     newPieces.values.set(d.id, d.attacked(offence.status.attackPoint));
     return newPieces;
   }
+  run({ side, field }) {
+    var pieces = this.map((unit) => unit.reset());
+    for (let i = 0; i < 3; i++) {
+      pieces = pieces.map((unit) => {
+        if (side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+          return unit.moveIfNeeded({
+            field,
+            pieces
+          });
+        } else {
+          return unit;
+        }
+      });
+    }
+    pieces = pieces.map((unit) => {
+      if (unit.isDead) {
+        return unit;
+      }
+      if (side != unit.side) {
+        return unit;
+      }
+      const otherKing = side == "friend" ? pieces.enemyKing : pieces.friendKing;
+      const goalY = side == "friend" ? 0 : 7;
+      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
+      if (unit.position.y == goalY) {
+        return unit.changeDirection(leftOrRight);
+      } else {
+        return unit;
+      }
+    });
+    const offenceAndDefenceList = pieces.mapOther((unit) => {
+      if (side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
+        return unit.getOffenceAndDefence({
+          field,
+          pieces
+        });
+      } else {
+        return null;
+      }
+    }).filter((v) => v != null);
+    const attackedPieces = offenceAndDefenceList.reduce((memo, v) => {
+      return memo.attack(v);
+    }, pieces);
+    return attackedPieces;
+  }
 };
 var UnitType = /* @__PURE__ */ function(UnitType2) {
   UnitType2["Infantry"] = "Infantry";
@@ -582,50 +627,13 @@ var LogicalWar = class _LogicalWar {
     return new _LogicalWar(field, pieces, isDeadFriendKing, isDeadEnemyKing, side, attackLog, turnCount);
   }
   run() {
-    var pieces = this.pieces.map((unit) => unit.reset());
-    for (let i = 0; i < 3; i++) {
-      pieces = pieces.map((unit) => {
-        if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
-          return unit.moveIfNeeded({
-            field: this.field,
-            pieces
-          });
-        } else {
-          return unit;
-        }
-      });
-    }
-    pieces = pieces.map((unit) => {
-      if (unit.isDead) {
-        return unit;
-      }
-      if (this.side != unit.side) {
-        return unit;
-      }
-      const otherKing = this.side == "friend" ? this.pieces.enemyKing : this.pieces.friendKing;
-      const goalY = this.side == "friend" ? 0 : 7;
-      const leftOrRight = otherKing.position.x - unit.position.x > 0 ? "right" : "left";
-      if (unit.position.y == goalY) {
-        return unit.changeDirection(leftOrRight);
-      } else {
-        return unit;
-      }
+    const pieces = this.pieces.run({
+      side: this.side,
+      field: this.field
     });
-    const offenceAndDefenceList = pieces.mapOther((unit) => {
-      if (this.side == unit.side && unit.state == "unprocessed" && unit.isAlive) {
-        return unit.getOffenceAndDefence({
-          field: this.field,
-          pieces
-        });
-      } else {
-        return null;
-      }
-    }).filter((v) => v != null);
-    const movedGame = new _LogicalWar(this.field, pieces, this.isDeadFriendKing, this.isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
-    const attackedGame = offenceAndDefenceList.reduce((memo, v) => {
-      return memo.attack(v);
-    }, movedGame);
-    return attackedGame;
+    const isDeadFriendKing = pieces.friendKing.isDead;
+    const isDeadEnemyKing = pieces.enemyKing.isDead;
+    return new _LogicalWar(this.field, pieces, isDeadFriendKing, isDeadEnemyKing, this.side, this.attackLog, this.turnCount);
   }
   nextSide() {
     const side = this.side == "friend" ? "enemy" : "friend";
