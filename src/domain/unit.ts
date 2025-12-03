@@ -27,7 +27,7 @@ export class Pieces {
   static fromSet(values: Set<Unit>) {
     return new Pieces(new Map(Array.from(values.keys()).map(v => ([v.id, v] as [string, Unit]))));
   }
-  static init(formationText:string) {
+  static init(formationText: string) {
     const createUnit = (v: string, x: number, y: number) => {
       if (v == '00') {
         return null;
@@ -150,7 +150,7 @@ export class Status {
 }
 
 export class Hp {
-  isDead:boolean;
+  isDead: boolean;
   constructor(
     readonly value: number
   ) {
@@ -165,6 +165,132 @@ export type UnitState = "unprocessed" | "moved" | "attack" | "wait";
 export type OffenceAndDefence = { offence: Unit, defence: Unit };
 
 export abstract class Unit {
+  readonly id: string;
+  readonly type: UnitType;
+  readonly isDead: boolean;
+  readonly isAlive: boolean;
+  readonly hp: Hp;
+  readonly status: Status;
+  readonly state: UnitState;
+  readonly side: Side;
+  readonly position: Position;
+  readonly direction: Direction;
+  constructor(
+    readonly primitive: UnitPrimitive
+  ) {
+    this.id = this.primitive.id;
+    this.type = this.primitive.type;
+    this.isDead = this.primitive.isDead;
+    this.isAlive = this.primitive.isAlive;
+    this.hp = this.primitive.hp;
+    this.status = this.primitive.status;
+    this.state = this.primitive.state;
+    this.side = this.primitive.side;
+    this.position = this.primitive.position;
+    this.direction = this.primitive.direction;
+  }
+  create(
+    primitive: UnitPrimitive
+  ): Unit {
+    throw new Error("abstract method");
+  }
+
+  reset() {
+    return this.setState("unprocessed");
+  }
+
+  attacked(power: number): Unit {
+    return this.create(this.primitive.attacked(power));
+  }
+
+  setPosition(position: Position) {
+    return this.create(this.primitive.setPosition(position));
+  }
+
+  changeDirection(direction: Direction) {
+    return this.create(this.primitive.changeDirection(direction));
+  }
+
+  setState(value: UnitState) {
+    return this.create(this.primitive.setState(value));
+  }
+
+  /**
+   * 向いている方向の座標を返す
+   * @param num いくつ進むか
+   * @returns 
+   */
+  next(num = 1) {
+    return this.primitive.next(num);
+  }
+
+  isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
+    const nextPos: Position = this.next(1);
+    return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
+  }
+
+  move({ field, pieces }: { field: Field, pieces: Pieces }) {
+    if (!this.isMovable({ field, pieces })) {
+      throw new Error('移動できません');
+    }
+    const nextPos = this.next(1);
+    return this.setPosition(nextPos);
+  }
+
+  isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
+    if (pieces.isEmpty(this.next())) {
+      return false;
+    }
+    const unit = pieces.getUnit(this.next());
+    if (unit.side == this.side) {
+      return false;
+    }
+    return true;
+  }
+
+  getAttackTarget({ field, pieces }: { field: Field, pieces: Pieces }) {
+    if (!this.isAttackable({ field, pieces })) {
+      throw new Error("攻撃可能な対象がありません")
+    }
+    return pieces.getUnit(this.next());
+  }
+
+
+  moveIfNeeded({ field, pieces }: { field: Field, pieces: Pieces }) {
+    if (this.state != "unprocessed") {
+      return this;
+    }
+    let result: Unit = this;
+    let isMove = false;
+    for (let i = 0; i < this.status.moveSpeed; i++) {
+      if (result.isMovable({ field, pieces })) {
+        isMove = true;
+        result = result.move({ field, pieces });
+      }
+    }
+    if (isMove) {
+      return result.setState("moved");
+    }
+    return this;
+  }
+
+  getOffenceAndDefence({ field, pieces }: { field: Field, pieces: Pieces }): OffenceAndDefence | null {
+    if (this.state != "unprocessed") {
+      return null;
+    }
+    const position = this.position;
+    if (this.isAttackable({ field, pieces })) {
+      console.log("atack")
+      const offence = this;
+      const defence = this.getAttackTarget({ field, pieces });
+      return { offence, defence };
+    } else {
+      return null;
+    }
+  }
+}
+
+export class UnitPrimitive {
   readonly isDead: boolean;
   readonly isAlive: boolean;
   constructor(
@@ -173,26 +299,13 @@ export abstract class Unit {
     readonly position: Position,
     readonly direction: Direction,
     readonly side: Side,
-    readonly hp:Hp,
+    readonly hp: Hp,
     readonly status: Status,
     readonly state: UnitState,
     readonly isAttacked: boolean
   ) {
     this.isDead = this.hp.isDead;
     this.isAlive = !this.isDead;
-  }
-  create(
-    id: string,
-    position: Position,
-    direction: Direction,
-    side: Side,
-    hp:Hp,
-    status: Status,
-    state: UnitState,
-    isAttacked: boolean
-  ): Unit {
-    throw new Error("abstract method");
-    // return new Unit(id, type, position, direction, side, status, state);
   }
 
   reset() {
@@ -204,7 +317,7 @@ export abstract class Unit {
       return this;
     }
     const hp = this.hp.attacked(power, this.status);
-    return this.create(this.id, this.position, this.direction, this.side, hp, this.status, this.state, true);
+    return new UnitPrimitive(this.id, this.type, this.position, this.direction, this.side, hp, this.status, this.state, true);
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -213,7 +326,7 @@ export abstract class Unit {
   }
 
   setPosition(position: Position) {
-    return this.create(this.id, position, this.direction, this.side, this.hp, this.status, this.state, this.isAttacked);
+    return new UnitPrimitive(this.id, this.type, position, this.direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
 
   move({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -225,7 +338,7 @@ export abstract class Unit {
   }
 
   changeDirection(direction: Direction) {
-    return this.create(this.id, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
+    return new UnitPrimitive(this.id, this.type, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
 
   isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -271,7 +384,7 @@ export abstract class Unit {
     if (this.state != "unprocessed") {
       return this;
     }
-    let result: Unit = this;
+    let result: UnitPrimitive = this;
     let isMove = false;
     for (let i = 0; i < this.status.moveSpeed; i++) {
       if (result.isMovable({ field, pieces })) {
@@ -285,40 +398,15 @@ export abstract class Unit {
     return this;
   }
 
-  getOffenceAndDefence({ field, pieces }: { field: Field, pieces: Pieces }): OffenceAndDefence | null {
-    if (this.state != "unprocessed") {
-      return null;
-    }
-    const position = this.position;
-    if (this.isAttackable({ field, pieces })) {
-      console.log("atack")
-      const offence = this;
-      const defence = this.getAttackTarget({ field, pieces });
-      return { offence, defence };
-    } else {
-      return null;
-    }
-  }
-
   setState(value: UnitState) {
     const isAttacked = value == 'unprocessed' ? false : this.isAttacked;
-    return this.create(this.id, this.position, this.direction, this.side, this.hp, this.status, value, isAttacked);
+    return new UnitPrimitive(this.id, this.type, this.position, this.direction, this.side, this.hp, this.status, value, isAttacked);
   }
 }
 
 export class InfantryUnit extends Unit {
-  constructor(
-    readonly id: string,
-    readonly position: Position,
-    readonly direction: Direction,
-    readonly side: Side,
-    readonly hp:Hp,
-    readonly status: Status,
-    readonly state: UnitState,
-    readonly isAttacked: boolean
-  ) {
-
-    super(id, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked);
+  constructor(readonly primitive: UnitPrimitive) {
+    super(primitive);
   }
   static init(
     id: string,
@@ -330,19 +418,12 @@ export class InfantryUnit extends Unit {
   ) {
     const status = new Status(10, 1, 1, 1);
     const hp = new Hp(status.maxHp);
-    return new InfantryUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new InfantryUnit(new UnitPrimitive(id, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked));
   }
   create(
-    id: string,
-    position: Position,
-    direction: Direction,
-    side: Side,
-    hp:Hp,
-    status: Status,
-    state: UnitState,
-    isAttacked: boolean
+    primitive: UnitPrimitive
   ): Unit {
-    return new InfantryUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new InfantryUnit(primitive);
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -357,17 +438,8 @@ export class InfantryUnit extends Unit {
 }
 
 export class CavalryUnit extends Unit {
-  constructor(
-    readonly id: string,
-    readonly position: Position,
-    readonly direction: Direction,
-    readonly side: Side,
-    readonly hp:Hp,
-    readonly status: Status,
-    readonly state: UnitState,
-    readonly isAttacked: boolean
-  ) {
-    super(id, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked);
+  constructor(readonly primitive: UnitPrimitive) {
+    super(primitive);
   }
   static init(
     id: string,
@@ -379,19 +451,12 @@ export class CavalryUnit extends Unit {
   ) {
     const status = new Status(10, 5, 1, 2);
     const hp = new Hp(status.maxHp);
-    return new CavalryUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new CavalryUnit(new UnitPrimitive(id, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked));
   }
   create(
-    id: string,
-    position: Position,
-    direction: Direction,
-    side: Side,
-    hp:Hp,
-    status: Status,
-    state: UnitState,
-    isAttacked: boolean
+    primitive: UnitPrimitive
   ): Unit {
-    return new CavalryUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new CavalryUnit(primitive);
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -406,20 +471,9 @@ export class CavalryUnit extends Unit {
 }
 
 export class ArcherUnit extends Unit {
-  constructor(
-    readonly id: string,
-    readonly position: Position,
-    readonly direction: Direction,
-    readonly side: Side,
-    readonly hp:Hp,
-    readonly status: Status,
-    readonly state: UnitState,
-    readonly isAttacked: boolean
-  ) {
-
-    super(id, UnitType.Archer, position, direction, side, hp, status, state, isAttacked);
+  constructor(readonly primitive: UnitPrimitive) {
+    super(primitive);
   }
-
   static init(
     id: string,
     position: Position,
@@ -430,19 +484,13 @@ export class ArcherUnit extends Unit {
   ) {
     const status = new Status(10, 4, 1, 0);
     const hp = new Hp(status.maxHp);
-    return new ArcherUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new ArcherUnit(new UnitPrimitive(id, UnitType.Archer, position, direction, side, hp, status, state, isAttacked));
   }
+
   create(
-    id: string,
-    position: Position,
-    direction: Direction,
-    side: Side,
-    hp:Hp,
-    status: Status,
-    state: UnitState,
-    isAttacked: boolean
+    primitive: UnitPrimitive
   ): Unit {
-    return new ArcherUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new ArcherUnit(primitive);
   }
 
   /**
@@ -488,19 +536,9 @@ export class ArcherUnit extends Unit {
 
 
 export class KingUnit extends Unit {
-  constructor(
-    readonly id: string,
-    readonly position: Position,
-    readonly direction: Direction,
-    readonly side: Side,
-    readonly hp:Hp,
-    readonly status: Status,
-    readonly state: UnitState,
-    readonly isAttacked: boolean
-  ) {
-    super(id, UnitType.King, position, direction, side, hp, status, state, isAttacked);
+  constructor(readonly primitive: UnitPrimitive) {
+    super(primitive);
   }
-
   static init(
     id: string,
     position: Position,
@@ -511,20 +549,13 @@ export class KingUnit extends Unit {
   ) {
     const status = new Status(1, 0, 0, 0);
     const hp = new Hp(status.maxHp);
-    return new KingUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new KingUnit(new UnitPrimitive(id, UnitType.King, position, direction, side, hp, status, state, isAttacked));
   }
 
   create(
-    id: string,
-    position: Position,
-    direction: Direction,
-    side: Side,
-    hp:Hp,
-    status: Status,
-    state: UnitState,
-    isAttacked: boolean
+    primitive: UnitPrimitive
   ): Unit {
-    return new KingUnit(id, position, direction, side, hp, status, state, isAttacked);
+    return new KingUnit(primitive);
   }
 
   /**

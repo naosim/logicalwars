@@ -192,6 +192,137 @@ var Hp = class _Hp {
   }
 };
 var Unit = class {
+  primitive;
+  id;
+  type;
+  isDead;
+  isAlive;
+  hp;
+  status;
+  state;
+  side;
+  position;
+  direction;
+  constructor(primitive) {
+    this.primitive = primitive;
+    this.id = this.primitive.id;
+    this.type = this.primitive.type;
+    this.isDead = this.primitive.isDead;
+    this.isAlive = this.primitive.isAlive;
+    this.hp = this.primitive.hp;
+    this.status = this.primitive.status;
+    this.state = this.primitive.state;
+    this.side = this.primitive.side;
+    this.position = this.primitive.position;
+    this.direction = this.primitive.direction;
+  }
+  create(primitive) {
+    throw new Error("abstract method");
+  }
+  reset() {
+    return this.setState("unprocessed");
+  }
+  attacked(power) {
+    return this.create(this.primitive.attacked(power));
+  }
+  setPosition(position) {
+    return this.create(this.primitive.setPosition(position));
+  }
+  changeDirection(direction) {
+    return this.create(this.primitive.changeDirection(direction));
+  }
+  setState(value) {
+    return this.create(this.primitive.setState(value));
+  }
+  /**
+   * 向いている方向の座標を返す
+   * @param num いくつ進むか
+   * @returns 
+   */
+  next(num = 1) {
+    return this.primitive.next(num);
+  }
+  isMovable({ field, pieces }) {
+    const nextPos = this.next(1);
+    return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
+  }
+  move({ field, pieces }) {
+    if (!this.isMovable({
+      field,
+      pieces
+    })) {
+      throw new Error("\u79FB\u52D5\u3067\u304D\u307E\u305B\u3093");
+    }
+    const nextPos = this.next(1);
+    return this.setPosition(nextPos);
+  }
+  isAttackable({ field, pieces }) {
+    if (pieces.isEmpty(this.next())) {
+      return false;
+    }
+    const unit = pieces.getUnit(this.next());
+    if (unit.side == this.side) {
+      return false;
+    }
+    return true;
+  }
+  getAttackTarget({ field, pieces }) {
+    if (!this.isAttackable({
+      field,
+      pieces
+    })) {
+      throw new Error("\u653B\u6483\u53EF\u80FD\u306A\u5BFE\u8C61\u304C\u3042\u308A\u307E\u305B\u3093");
+    }
+    return pieces.getUnit(this.next());
+  }
+  moveIfNeeded({ field, pieces }) {
+    if (this.state != "unprocessed") {
+      return this;
+    }
+    let result = this;
+    let isMove = false;
+    for (let i = 0; i < this.status.moveSpeed; i++) {
+      if (result.isMovable({
+        field,
+        pieces
+      })) {
+        isMove = true;
+        result = result.move({
+          field,
+          pieces
+        });
+      }
+    }
+    if (isMove) {
+      return result.setState("moved");
+    }
+    return this;
+  }
+  getOffenceAndDefence({ field, pieces }) {
+    if (this.state != "unprocessed") {
+      return null;
+    }
+    const position = this.position;
+    if (this.isAttackable({
+      field,
+      pieces
+    })) {
+      console.log("atack");
+      const offence = this;
+      const defence = this.getAttackTarget({
+        field,
+        pieces
+      });
+      return {
+        offence,
+        defence
+      };
+    } else {
+      return null;
+    }
+  }
+};
+var UnitPrimitive = class _UnitPrimitive {
   id;
   type;
   position;
@@ -216,9 +347,6 @@ var Unit = class {
     this.isDead = this.hp.isDead;
     this.isAlive = !this.isDead;
   }
-  create(id2, position, direction, side, hp, status, state, isAttacked) {
-    throw new Error("abstract method");
-  }
   reset() {
     return this.setState("unprocessed");
   }
@@ -227,14 +355,14 @@ var Unit = class {
       return this;
     }
     const hp = this.hp.attacked(power, this.status);
-    return this.create(this.id, this.position, this.direction, this.side, hp, this.status, this.state, true);
+    return new _UnitPrimitive(this.id, this.type, this.position, this.direction, this.side, hp, this.status, this.state, true);
   }
   isMovable({ field, pieces }) {
     const nextPos = this.next(1);
     return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
   }
   setPosition(position) {
-    return this.create(this.id, position, this.direction, this.side, this.hp, this.status, this.state, this.isAttacked);
+    return new _UnitPrimitive(this.id, this.type, position, this.direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
   move({ field, pieces }) {
     if (!this.isMovable({
@@ -247,7 +375,7 @@ var Unit = class {
     return this.setPosition(nextPos);
   }
   changeDirection(direction) {
-    return this.create(this.id, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
+    return new _UnitPrimitive(this.id, this.type, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
   isAttackable({ field, pieces }) {
     if (pieces.isEmpty(this.next())) {
@@ -327,53 +455,23 @@ var Unit = class {
     }
     return this;
   }
-  getOffenceAndDefence({ field, pieces }) {
-    if (this.state != "unprocessed") {
-      return null;
-    }
-    const position = this.position;
-    if (this.isAttackable({
-      field,
-      pieces
-    })) {
-      console.log("atack");
-      const offence = this;
-      const defence = this.getAttackTarget({
-        field,
-        pieces
-      });
-      return {
-        offence,
-        defence
-      };
-    } else {
-      return null;
-    }
-  }
   setState(value) {
     const isAttacked = value == "unprocessed" ? false : this.isAttacked;
-    return this.create(this.id, this.position, this.direction, this.side, this.hp, this.status, value, isAttacked);
+    return new _UnitPrimitive(this.id, this.type, this.position, this.direction, this.side, this.hp, this.status, value, isAttacked);
   }
 };
 var InfantryUnit = class _InfantryUnit extends Unit {
-  id;
-  position;
-  direction;
-  side;
-  hp;
-  status;
-  state;
-  isAttacked;
-  constructor(id2, position, direction, side, hp, status, state, isAttacked) {
-    super(id2, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked), this.id = id2, this.position = position, this.direction = direction, this.side = side, this.hp = hp, this.status = status, this.state = state, this.isAttacked = isAttacked;
+  primitive;
+  constructor(primitive) {
+    super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
     const status = new Status(10, 1, 1, 1);
     const hp = new Hp(status.maxHp);
-    return new _InfantryUnit(id2, position, direction, side, hp, status, state, isAttacked);
+    return new _InfantryUnit(new UnitPrimitive(id2, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked));
   }
-  create(id2, position, direction, side, hp, status, state, isAttacked) {
-    return new _InfantryUnit(id2, position, direction, side, hp, status, state, isAttacked);
+  create(primitive) {
+    return new _InfantryUnit(primitive);
   }
   isMovable({ field, pieces }) {
     const result = super.isMovable({
@@ -388,24 +486,17 @@ var InfantryUnit = class _InfantryUnit extends Unit {
   }
 };
 var CavalryUnit = class _CavalryUnit extends Unit {
-  id;
-  position;
-  direction;
-  side;
-  hp;
-  status;
-  state;
-  isAttacked;
-  constructor(id2, position, direction, side, hp, status, state, isAttacked) {
-    super(id2, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked), this.id = id2, this.position = position, this.direction = direction, this.side = side, this.hp = hp, this.status = status, this.state = state, this.isAttacked = isAttacked;
+  primitive;
+  constructor(primitive) {
+    super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
     const status = new Status(10, 5, 1, 2);
     const hp = new Hp(status.maxHp);
-    return new _CavalryUnit(id2, position, direction, side, hp, status, state, isAttacked);
+    return new _CavalryUnit(new UnitPrimitive(id2, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked));
   }
-  create(id2, position, direction, side, hp, status, state, isAttacked) {
-    return new _CavalryUnit(id2, position, direction, side, hp, status, state, isAttacked);
+  create(primitive) {
+    return new _CavalryUnit(primitive);
   }
   isMovable({ field, pieces }) {
     const result = super.isMovable({
@@ -420,24 +511,17 @@ var CavalryUnit = class _CavalryUnit extends Unit {
   }
 };
 var ArcherUnit = class _ArcherUnit extends Unit {
-  id;
-  position;
-  direction;
-  side;
-  hp;
-  status;
-  state;
-  isAttacked;
-  constructor(id2, position, direction, side, hp, status, state, isAttacked) {
-    super(id2, UnitType.Archer, position, direction, side, hp, status, state, isAttacked), this.id = id2, this.position = position, this.direction = direction, this.side = side, this.hp = hp, this.status = status, this.state = state, this.isAttacked = isAttacked;
+  primitive;
+  constructor(primitive) {
+    super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
     const status = new Status(10, 4, 1, 0);
     const hp = new Hp(status.maxHp);
-    return new _ArcherUnit(id2, position, direction, side, hp, status, state, isAttacked);
+    return new _ArcherUnit(new UnitPrimitive(id2, UnitType.Archer, position, direction, side, hp, status, state, isAttacked));
   }
-  create(id2, position, direction, side, hp, status, state, isAttacked) {
-    return new _ArcherUnit(id2, position, direction, side, hp, status, state, isAttacked);
+  create(primitive) {
+    return new _ArcherUnit(primitive);
   }
   /**
    * 向いている方向にある最初の相手を返す。ただし王将は除外する
@@ -482,24 +566,17 @@ var ArcherUnit = class _ArcherUnit extends Unit {
   }
 };
 var KingUnit = class _KingUnit extends Unit {
-  id;
-  position;
-  direction;
-  side;
-  hp;
-  status;
-  state;
-  isAttacked;
-  constructor(id2, position, direction, side, hp, status, state, isAttacked) {
-    super(id2, UnitType.King, position, direction, side, hp, status, state, isAttacked), this.id = id2, this.position = position, this.direction = direction, this.side = side, this.hp = hp, this.status = status, this.state = state, this.isAttacked = isAttacked;
+  primitive;
+  constructor(primitive) {
+    super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
     const status = new Status(1, 0, 0, 0);
     const hp = new Hp(status.maxHp);
-    return new _KingUnit(id2, position, direction, side, hp, status, state, isAttacked);
+    return new _KingUnit(new UnitPrimitive(id2, UnitType.King, position, direction, side, hp, status, state, isAttacked));
   }
-  create(id2, position, direction, side, hp, status, state, isAttacked) {
-    return new _KingUnit(id2, position, direction, side, hp, status, state, isAttacked);
+  create(primitive) {
+    return new _KingUnit(primitive);
   }
   /**
    * 王将は攻撃できない
