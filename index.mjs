@@ -243,18 +243,22 @@ var Unit = class {
     return this.primitive.next(num);
   }
   isMovable({ field, pieces }) {
-    const nextPos = this.next(1);
-    return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
-  }
-  move({ field, pieces }) {
-    if (!this.isMovable({
+    return this.primitive.isMovable({
       field,
       pieces
-    })) {
-      throw new Error("\u79FB\u52D5\u3067\u304D\u307E\u305B\u3093");
-    }
-    const nextPos = this.next(1);
-    return this.setPosition(nextPos);
+    });
+  }
+  move({ field, pieces }) {
+    return this.create(this.primitive.move({
+      field,
+      pieces
+    }));
+  }
+  moveIfNeeded({ field, pieces }) {
+    return this.create(this.primitive.moveIfNeeded({
+      field,
+      pieces
+    }));
   }
   isAttackable({ field, pieces }) {
     if (pieces.isEmpty(this.next())) {
@@ -274,29 +278,6 @@ var Unit = class {
       throw new Error("\u653B\u6483\u53EF\u80FD\u306A\u5BFE\u8C61\u304C\u3042\u308A\u307E\u305B\u3093");
     }
     return pieces.getUnit(this.next());
-  }
-  moveIfNeeded({ field, pieces }) {
-    if (this.state != "unprocessed") {
-      return this;
-    }
-    let result = this;
-    let isMove = false;
-    for (let i = 0; i < this.status.moveSpeed; i++) {
-      if (result.isMovable({
-        field,
-        pieces
-      })) {
-        isMove = true;
-        result = result.move({
-          field,
-          pieces
-        });
-      }
-    }
-    if (isMove) {
-      return result.setState("moved");
-    }
-    return this;
   }
   getOffenceAndDefence({ field, pieces }) {
     if (this.state != "unprocessed") {
@@ -376,25 +357,6 @@ var UnitPrimitive = class _UnitPrimitive {
   }
   changeDirection(direction) {
     return new _UnitPrimitive(this.id, this.type, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
-  }
-  isAttackable({ field, pieces }) {
-    if (pieces.isEmpty(this.next())) {
-      return false;
-    }
-    const unit = pieces.getUnit(this.next());
-    if (unit.side == this.side) {
-      return false;
-    }
-    return true;
-  }
-  getAttackTarget({ field, pieces }) {
-    if (!this.isAttackable({
-      field,
-      pieces
-    })) {
-      throw new Error("\u653B\u6483\u53EF\u80FD\u306A\u5BFE\u8C61\u304C\u3042\u308A\u307E\u305B\u3093");
-    }
-    return pieces.getUnit(this.next());
   }
   /**
    * 向いている方向の座標を返す

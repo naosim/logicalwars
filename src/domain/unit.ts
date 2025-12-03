@@ -225,16 +225,15 @@ export abstract class Unit {
   }
 
   isMovable({ field, pieces }: { field: Field, pieces: Pieces }) {
-    const nextPos: Position = this.next(1);
-    return pieces.isInBounds(nextPos) && pieces.isEmpty(nextPos);
+    return this.primitive.isMovable({ field, pieces });
   }
 
   move({ field, pieces }: { field: Field, pieces: Pieces }) {
-    if (!this.isMovable({ field, pieces })) {
-      throw new Error('移動できません');
-    }
-    const nextPos = this.next(1);
-    return this.setPosition(nextPos);
+    return this.create(this.primitive.move({ field, pieces }));
+  }
+
+  moveIfNeeded({ field, pieces }: { field: Field, pieces: Pieces }) {
+    return this.create(this.primitive.moveIfNeeded({ field, pieces }));
   }
 
   isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
@@ -253,25 +252,6 @@ export abstract class Unit {
       throw new Error("攻撃可能な対象がありません")
     }
     return pieces.getUnit(this.next());
-  }
-
-
-  moveIfNeeded({ field, pieces }: { field: Field, pieces: Pieces }) {
-    if (this.state != "unprocessed") {
-      return this;
-    }
-    let result: Unit = this;
-    let isMove = false;
-    for (let i = 0; i < this.status.moveSpeed; i++) {
-      if (result.isMovable({ field, pieces })) {
-        isMove = true;
-        result = result.move({ field, pieces });
-      }
-    }
-    if (isMove) {
-      return result.setState("moved");
-    }
-    return this;
   }
 
   getOffenceAndDefence({ field, pieces }: { field: Field, pieces: Pieces }): OffenceAndDefence | null {
@@ -341,23 +321,6 @@ export class UnitPrimitive {
     return new UnitPrimitive(this.id, this.type, this.position, direction, this.side, this.hp, this.status, this.state, this.isAttacked);
   }
 
-  isAttackable({ field, pieces }: { field: Field, pieces: Pieces }) {
-    if (pieces.isEmpty(this.next())) {
-      return false;
-    }
-    const unit = pieces.getUnit(this.next());
-    if (unit.side == this.side) {
-      return false;
-    }
-    return true;
-  }
-
-  getAttackTarget({ field, pieces }: { field: Field, pieces: Pieces }) {
-    if (!this.isAttackable({ field, pieces })) {
-      throw new Error("攻撃可能な対象がありません")
-    }
-    return pieces.getUnit(this.next());
-  }
   /**
    * 向いている方向の座標を返す
    * @param num いくつ進むか
