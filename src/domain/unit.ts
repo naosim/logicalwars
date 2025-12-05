@@ -120,7 +120,7 @@ export class Pieces {
     const d = this.findById(offenceAndDefence.defence.id);
 
     const newPieces = this.copyy();
-    const newDifence = d.attacked(offenceAndDefence.offence.status.attackPoint);
+    const newDifence = d.attacked(offenceAndDefence.offence.status.attackPoint, offenceAndDefence.isAttakedFromFront());
     if (newDifence.isDead) {
       console.log("dead", newDifence);
     }
@@ -216,8 +216,11 @@ export class Hp {
   ) {
     this.isDead = value <= 0;
   }
-  attacked(attackPoint: number, status: Status) {
-    return new Hp(this.value - attackPoint + status.defencePoint);
+  attacked(attackPoint: number, status: Status, isAttakedFromFront: boolean) {
+    if (isAttakedFromFront) {
+      return new Hp(this.value - attackPoint + status.defencePoint);
+    }
+    return new Hp(this.value - attackPoint);
   }
 }
 
@@ -228,6 +231,10 @@ export class OffenceAndDefence {
     readonly offence: Unit,
     readonly defence: Unit
   ) {
+  }
+  isAttakedFromFront() {
+    const nextPos = this.defence.next(1);
+    return this.offence.position.x == nextPos.x && this.offence.position.y == nextPos.y;
   }
   isFrontAttack() {
     // return false;
@@ -278,8 +285,8 @@ export abstract class Unit {
     return this.setState("unprocessed");
   }
 
-  attacked(power: number): Unit {
-    return this.create(this.primitive.attacked(power));
+  attacked(power: number, isAttakedFromFront: boolean): Unit {
+    return this.create(this.primitive.attacked(power, isAttakedFromFront));
   }
 
   setPosition(position: Position) {
@@ -371,11 +378,11 @@ export class UnitPrimitive {
     return this.setState("unprocessed");
   }
 
-  attacked(power: number) {
+  attacked(power: number, isAttakedFromFront: boolean) {
     if (power == 0) {
       return this;
     }
-    const hp = this.hp.attacked(power, this.status);
+    const hp = this.hp.attacked(power, this.status, isAttakedFromFront);
     return new UnitPrimitive(this.id, this.type, this.position, this.direction, this.side, hp, this.status, this.state, true);
   }
 

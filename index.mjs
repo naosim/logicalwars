@@ -156,7 +156,7 @@ var Pieces = class _Pieces {
     const o = this.findById(offenceAndDefence.offence.id);
     const d = this.findById(offenceAndDefence.defence.id);
     const newPieces = this.copyy();
-    const newDifence = d.attacked(offenceAndDefence.offence.status.attackPoint);
+    const newDifence = d.attacked(offenceAndDefence.offence.status.attackPoint, offenceAndDefence.isAttakedFromFront());
     if (newDifence.isDead) {
       console.log("dead", newDifence);
     }
@@ -247,8 +247,11 @@ var Hp = class _Hp {
     this.value = value;
     this.isDead = value <= 0;
   }
-  attacked(attackPoint, status) {
-    return new _Hp(this.value - attackPoint + status.defencePoint);
+  attacked(attackPoint, status, isAttakedFromFront) {
+    if (isAttakedFromFront) {
+      return new _Hp(this.value - attackPoint + status.defencePoint);
+    }
+    return new _Hp(this.value - attackPoint);
   }
 };
 var OffenceAndDefence = class {
@@ -257,6 +260,10 @@ var OffenceAndDefence = class {
   constructor(offence, defence) {
     this.offence = offence;
     this.defence = defence;
+  }
+  isAttakedFromFront() {
+    const nextPos = this.defence.next(1);
+    return this.offence.position.x == nextPos.x && this.offence.position.y == nextPos.y;
   }
   isFrontAttack() {
     if (this.offence.status.moveSpeed == 0) {
@@ -299,8 +306,8 @@ var Unit = class {
   reset() {
     return this.setState("unprocessed");
   }
-  attacked(power) {
-    return this.create(this.primitive.attacked(power));
+  attacked(power, isAttakedFromFront) {
+    return this.create(this.primitive.attacked(power, isAttakedFromFront));
   }
   setPosition(position) {
     return this.create(this.primitive.setPosition(position));
@@ -405,11 +412,11 @@ var UnitPrimitive = class _UnitPrimitive {
   reset() {
     return this.setState("unprocessed");
   }
-  attacked(power) {
+  attacked(power, isAttakedFromFront) {
     if (power == 0) {
       return this;
     }
-    const hp = this.hp.attacked(power, this.status);
+    const hp = this.hp.attacked(power, this.status, isAttakedFromFront);
     return new _UnitPrimitive(this.id, this.type, this.position, this.direction, this.side, hp, this.status, this.state, true);
   }
   isMovable({ field, pieces }) {
