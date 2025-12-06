@@ -207,6 +207,10 @@ export class Status {
     readonly moveSpeed: number,
   ) {
   }
+  static readonly infantry = new Status(10, 10, 6, 1);
+  static readonly cavalry = new Status(10, 12, 6, 2);
+  static readonly archer = new Status(10, 10, 6, 0);
+  static readonly king = new Status(1, 0, 0, 0);
 }
 
 export class Hp {
@@ -466,7 +470,7 @@ export class InfantryUnit extends Unit {
     state: UnitState,
     isAttacked: boolean
   ) {
-    const status = new Status(10, 1, 1, 1);
+    const status = Status.infantry;
     const hp = new Hp(status.maxHp);
     return new InfantryUnit(new UnitPrimitive(id, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked));
   }
@@ -499,7 +503,7 @@ export class CavalryUnit extends Unit {
     state: UnitState,
     isAttacked: boolean
   ) {
-    const status = new Status(10, 5, 1, 2);
+    const status = Status.cavalry;
     const hp = new Hp(status.maxHp);
     return new CavalryUnit(new UnitPrimitive(id, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked));
   }
@@ -532,7 +536,7 @@ export class ArcherUnit extends Unit {
     state: UnitState,
     isAttacked: boolean
   ) {
-    const status = new Status(10, 4, 1, 0);
+    const status = Status.archer;
     const hp = new Hp(status.maxHp);
     return new ArcherUnit(new UnitPrimitive(id, UnitType.Archer, position, direction, side, hp, status, state, isAttacked));
   }
@@ -597,7 +601,7 @@ export class KingUnit extends Unit {
     state: UnitState,
     isAttacked: boolean
   ) {
-    const status = new Status(1, 0, 0, 0);
+    const status = Status.king;
     const hp = new Hp(status.maxHp);
     return new KingUnit(new UnitPrimitive(id, UnitType.King, position, direction, side, hp, status, state, isAttacked));
   }

@@ -228,7 +228,7 @@ var UnitType = /* @__PURE__ */ function(UnitType2) {
   UnitType2["King"] = "King";
   return UnitType2;
 }({});
-var Status = class {
+var Status = class _Status {
   maxHp;
   attackPoint;
   defencePoint;
@@ -239,6 +239,10 @@ var Status = class {
     this.defencePoint = defencePoint;
     this.moveSpeed = moveSpeed;
   }
+  static infantry = new _Status(10, 10, 6, 1);
+  static cavalry = new _Status(10, 12, 6, 2);
+  static archer = new _Status(10, 10, 6, 0);
+  static king = new _Status(1, 0, 0, 0);
 };
 var Hp = class _Hp {
   value;
@@ -510,7 +514,7 @@ var InfantryUnit = class _InfantryUnit extends Unit {
     super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
-    const status = new Status(10, 1, 1, 1);
+    const status = Status.infantry;
     const hp = new Hp(status.maxHp);
     return new _InfantryUnit(new UnitPrimitive(id2, UnitType.Infantry, position, direction, side, hp, status, state, isAttacked));
   }
@@ -535,7 +539,7 @@ var CavalryUnit = class _CavalryUnit extends Unit {
     super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
-    const status = new Status(10, 5, 1, 2);
+    const status = Status.cavalry;
     const hp = new Hp(status.maxHp);
     return new _CavalryUnit(new UnitPrimitive(id2, UnitType.Cavalry, position, direction, side, hp, status, state, isAttacked));
   }
@@ -560,7 +564,7 @@ var ArcherUnit = class _ArcherUnit extends Unit {
     super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
-    const status = new Status(10, 4, 1, 0);
+    const status = Status.archer;
     const hp = new Hp(status.maxHp);
     return new _ArcherUnit(new UnitPrimitive(id2, UnitType.Archer, position, direction, side, hp, status, state, isAttacked));
   }
@@ -615,7 +619,7 @@ var KingUnit = class _KingUnit extends Unit {
     super(primitive), this.primitive = primitive;
   }
   static init(id2, position, direction, side, state, isAttacked) {
-    const status = new Status(1, 0, 0, 0);
+    const status = Status.king;
     const hp = new Hp(status.maxHp);
     return new _KingUnit(new UnitPrimitive(id2, UnitType.King, position, direction, side, hp, status, state, isAttacked));
   }
